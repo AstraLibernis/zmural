@@ -46,8 +46,8 @@ Each package step leaves two things in `zig-out/package`:
 - **`debug/<package name>/`:** the debugging info taken out of it (`.pdb` files on
   Windows; `.debug` files on Linux, each tied to its program by a build ID).
 
-**Keep the `debug/` folder of every release you publish**, for example as a separate,
-private asset of the GitHub release. Without it a user's crash report can't be read, and
+**Keep the `debug/` folder of every release you publish**, for example as a separate
+asset of the GitHub release (it holds nothing secret; the source is public anyway). Without it a user's crash report can't be read, and
 it can't be rebuilt later: a new build has a new build ID and different addresses.
 
 Before publishing:

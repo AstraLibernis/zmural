@@ -20,7 +20,7 @@ The build plan, from an empty scaffold to a cross-platform release. It expands t
 | M2 | Process split | Windows | The renderer runs in its own process; crashes are contained | ✅ |
 | M3 | Real wallpapers | Windows | Videos and images play as wallpaper | ✅ |
 | M4 | Smart pausing | Windows | Games and fullscreen apps pause the wallpaper; 0 % GPU while hidden | ✅ |
-| M5 | Windows MVP | Windows | Tray, CLI, settings, library → **v0.1** (not published: the owner waits until most milestones are done) | 🔶 |
+| M5 | Windows MVP | Windows | Tray, CLI, settings, library → **v0.1** (not published yet: it waits until most milestones are done) | 🔶 |
 | M6 | Linux MVP | Linux | Same experience on wlr-layer-shell compositors, KDE Plasma and GNOME → **v0.2** | 🔶 |
 | M7 | Wallpapers that do more | both | Web wallpapers, properties and adjustments, JS API, audio, Lively import | 🔶 |
 | M8 | Polish | both | Rotation, a wallpaper and fill mode per monitor, span, transitions, updates and packages, sandbox, screensaver | 🔶 |
@@ -157,7 +157,7 @@ History: where each stub of the first scaffold was replaced. Paths are as they w
 - [x] Daemon logic with tests: playlists (sequential / shuffle / random), renderer router with sharing
 - [x] CLI argument parsing, Linux backend selection
 - [x] README, LICENSE, THIRD_PARTY_NOTICES, reference notes
-- [x] `git init`, first commit, GitHub repo (`AstraLibernis/zmural`, private for now)
+- [x] `git init`, first commit, GitHub repo (`AstraLibernis/zmural`; developed privately, public since 2026-10-12)
 - [x] CI: GitHub Actions running `zig build test` on Windows + Linux, plus the Linux cross-build
   - Removed 2026-09-28 (tests run by hand), and back since 2026-09-30 with a boot test of the real daemon on Windows (see the ground rules and the CI item in M6).
 

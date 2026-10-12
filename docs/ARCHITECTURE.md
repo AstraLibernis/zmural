@@ -131,7 +131,7 @@ zmural/
 ├── third_party/                  # vendored waywallen-display (the KDE plugin and GNOME extension)
 ├── tools/                        # generators and the Linux test scripts
 ├── docs/                         # build plan, building, releasing, architecture, wallpaper format
-├── notes/                        # design research on the reference projects
+├── notes/                        # dated dev notes: research, audits, test reports
 └── reference/                    # upstream source for study (git-ignored, never committed)
 ```
 

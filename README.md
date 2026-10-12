@@ -4,7 +4,7 @@
 
 Set videos, pictures and animated GIFs as your desktop wallpaper, with one app and one library on both operating systems. zmural stays out of your way: it pauses the moment a game or fullscreen app takes over, uses almost nothing while it's hidden, and never does anything that could trip anti-cheat.
 
-> **Status: in development, no public release yet.** zmural works day to day on Windows 11 and on Linux (KDE Plasma, GNOME, Sway and other Wayland desktops), but version 0.1 isn't published. Until it is, the only way to run it is to [build it yourself](docs/BUILDING.md). [docs/MILESTONES.md](docs/MILESTONES.md) says exactly what's done on each OS.
+> **Status: in development, no downloadable release yet.** zmural works day to day on Windows 11 and on Linux (KDE Plasma, GNOME, Sway and other Wayland desktops), and its source is public, but version 0.1 isn't published as a download. Until it is, the only way to run it is to [build it yourself](docs/BUILDING.md). [docs/MILESTONES.md](docs/MILESTONES.md) says exactly what's done on each OS.
 
 ## Contents
 

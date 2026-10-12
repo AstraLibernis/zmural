@@ -4,14 +4,13 @@
 # Windows it also builds the release zip and runs zmural from it, unzipped
 # into an empty folder.
 #
-# When it runs (owner's decision, 2026-09-30): the repository is private, so
-# CI spends the account's Actions minutes, Windows ones twice as fast. It runs
-# only for a finished milestone or a major push, not on every push:
+# When it runs (maintainer's decision, 2026-09-30): only for a finished
+# milestone or a major push, not on every push:
 # - by hand: Actions > CI > Run workflow;
 # - a pushed tag: v* (a release) or milestone-* (a finished milestone);
 # - a push to main whose last commit message contains [full ci].
 # Other pushes start it and every job is skipped, which costs nothing.
-# Linux is tested on real desktops by the owner, and on the headless rigs in
+# Linux is tested on real desktops by the maintainer, and on the headless rigs in
 # tools/ during development.
 name: CI
 
