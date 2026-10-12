@@ -71,9 +71,13 @@ k() { local a=(-s 600); for x in "$@"; do a+=(-k "$x" -s 150); done; wtype "${a[
 # Tab to the pages, Home (Welcome), Down to General, Tab twice to its page,
 # End to its last control (Uninstall).
 k Tab Home Down Down Down Down Return Tab Tab End Return
-k Left Return  # from No to Yes
-for _ in $(seq 50); do alive $ZD || break; sleep 0.1; done; sleep 1
+wtype -s 600 -k Left -s 150 -k Return; T0=$(date +%s%N)  # from No to Yes
+for _ in $(seq 100); do alive $ZD || break; sleep 0.05; done
+GONE_MS=$((($(date +%s%N) - T0) / 1000000)); sleep 1
 check "the window's Uninstall button, after its question, removes zmural too" "! alive $ZD && none_there ${added[*]} && all_there ${kept[*]}"
+# The window used to wait out a 3 s request to a zmural that was quitting,
+# showing a half-drawn dialog (blind test, 2026-10-12).
+check "…and it's gone soon after Yes, not seconds later (${GONE_MS} ms)" "[ $GONE_MS -lt 1500 ]"
 kill $SWAY 2>/dev/null; sleep 0.5
 
 # 3. The same, under a service manager that ends every process zmural started

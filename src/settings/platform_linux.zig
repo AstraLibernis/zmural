@@ -897,10 +897,14 @@ pub fn drawOverlay() void {
             ui.fill(bar, 8, p.card);
             const yes: Rect = .{ .x = r.x + 24, .y = bar.y + 16, .w = (r.w - 56) / 2, .h = 32 };
             const no: Rect = .{ .x = yes.right() + 8, .y = yes.y, .w = yes.w, .h = 32 };
-            if (ui.button(key("confirm-yes", 0), yes, "Yes", null, .accent)) {
+            // Both drawn before either acts: the frame a press ends on stays
+            // on screen until the next, and must not lose a button.
+            const yes_pressed = ui.button(key("confirm-yes", 0), yes, "Yes", null, .accent);
+            const no_pressed = ui.button(key("confirm-no", 0), no, "No", null, .standard);
+            if (yes_pressed) {
                 closeOverlay();
                 app_mod.confirmed(cf.action);
-            } else if (ui.button(key("confirm-no", 0), no, "No", null, .standard)) {
+            } else if (no_pressed) {
                 closeOverlay();
             }
         },

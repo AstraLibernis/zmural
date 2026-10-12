@@ -440,7 +440,10 @@ fn perform(action: Action) void {
         // marks it), so ask it to quit here.
         .uninstall_confirmed => {
             platform.startUninstall() catch return showToast("can't find zmural next to this program");
+            // Nothing to refresh: asking a zmural that is quitting would wait
+            // out the request's timeout while zmural waits for this window.
             if (builtin.os.tag == .linux) _ = call(.quit);
+            return;
         },
         .start_daemon => {
             platform.startDaemon() catch return showToast("can't find zmural next to this program");
