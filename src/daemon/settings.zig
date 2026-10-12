@@ -178,9 +178,9 @@ pub fn write(out: *std.Io.Writer, s: *const Settings) std.Io.Writer.Error!void {
         \\# zmural keeps this file up to date. You can also edit it by hand, even
         \\# while zmural runs: it picks up your saved changes within a second.
         \\#
-        \\# Unknown keys are ignored. If the file has a mistake, zmural starts with
-        \\# its defaults, tells you the line number in its log, and leaves your file
-        \\# untouched so you can fix it.
+        \\# Unknown keys are ignored. If the file has a mistake, zmural tells you
+        \\# which line in a notification, keeps the settings it has (its defaults,
+        \\# if it was just starting), and leaves your file untouched so you can fix it.
         \\
         \\# The wallpaper shown at startup: a video, image or animated GIF.
         \\# `zmural-console apply <file>`, Next and Previous change it.

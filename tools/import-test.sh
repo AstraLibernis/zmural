@@ -122,6 +122,7 @@ mkdir -p "$W/ex"
 (cd "$W/ex" && z export "$V/red-still/zmural.toml" >"$W/out.txt" 2>&1); rc=$?
 check "export of a package writes '<its folder>.zip' here (exit $rc)" "[ $rc = 0 ] && [ -f $W/ex/red-still.zip ]"
 check "…which unzip -t passes" "unzip -tq $W/ex/red-still.zip >/dev/null"
+check "…and whose files carry a valid date" "python3 -c \"import zipfile,sys; sys.exit(any(i.date_time[1] < 1 or i.date_time[2] < 1 for i in zipfile.ZipFile('$W/ex/red-still.zip').infolist()))\""
 z export "$V/Sunsets" "$W/ex/sun.zip" >/dev/null 2>&1
 rc=$(imp "$W/ex/sun.zip" --to "$W/back")
 check "a folder exported and imported again is the same, byte for byte" "[ $rc = 0 ] && diff -r $V/Sunsets $W/back/Sunsets"

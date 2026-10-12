@@ -56,7 +56,9 @@ THE SETTINGS WINDOW
 FROM A TERMINAL
   bin/zmural-console status              what's showing
   bin/zmural-console apply <file>        show a specific video, image or GIF
+  bin/zmural-console apply <file> --monitor 2   give one monitor its own (follow --monitor 2: back)
   bin/zmural-console next | previous     step through the library
+  bin/zmural-console order shuffle       or sequential, random (shuffle on|off too)
   bin/zmural-console pause | play        pause or resume
   bin/zmural-console mute | unmute
   bin/zmural-console fill fit            how it fills the screen (or crop, stretch, center)
@@ -68,6 +70,7 @@ FROM A TERMINAL
   bin/zmural-console rescan              pick up files you just added
   bin/zmural-console autostart on|off|status
   bin/zmural-console help                everything it can do
+  bin/zmural-console version             which zmural this is
   bin/zmural-console quit
 
 FILES

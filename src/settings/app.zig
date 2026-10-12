@@ -1481,7 +1481,11 @@ fn pageGeneral(l: *Layout) void {
     l.y += 20;
 
     groupHeader(l, "About");
-    _ = cardRow(l, 68, .star, "zmural " ++ zmural.version, "Free software (GPL-3.0-or-later). Video playback by libmpv (LGPL-2.1)", 0);
+    // Windows ships its own LGPL build of libmpv; Linux uses the system's.
+    _ = cardRow(l, 68, .star, "zmural " ++ zmural.version, if (builtin.os.tag == .windows)
+        "Free software (GPL-3.0-or-later). Video playback by libmpv (LGPL-2.1)"
+    else
+        "Free software (GPL-3.0-or-later). Video playback by your system's libmpv", 0);
 }
 
 fn drawToast() void {

@@ -343,7 +343,11 @@ fn report(arena: std.mem.Allocator, out: *std.Io.Writer, reply: control.Event) !
             if (s.rotate_minutes == 0) {
                 try out.writeAll(" off\n");
             } else {
-                try out.print(" every {d} min; next in {d}:{d:0>2} of playing time\n", .{ s.rotate_minutes, s.next_change_s / 60, s.next_change_s % 60 });
+                const t = s.next_change_s;
+                if (t >= 3600)
+                    try out.print(" every {d} min; next in {d}:{d:0>2}:{d:0>2} of playing time\n", .{ s.rotate_minutes, t / 3600, t / 60 % 60, t % 60 })
+                else
+                    try out.print(" every {d} min; next in {d}:{d:0>2} of playing time\n", .{ s.rotate_minutes, t / 60, t % 60 });
             }
             if (s.crash.len > 0) try out.print("crash     : {s}\n", .{s.crash});
         },

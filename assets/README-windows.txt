@@ -39,7 +39,9 @@ THE TRAY MENU
 FROM A TERMINAL
   zmural-console status              what's showing
   zmural-console apply <file>        show a specific video, image or GIF
+  zmural-console apply <file> --monitor 2   give one monitor its own (follow --monitor 2: back)
   zmural-console next | previous     step through the library
+  zmural-console order shuffle       or sequential, random (shuffle on|off too)
   zmural-console pause | play        pause or resume
   zmural-console mute | unmute
   zmural-console fill fit            how it fills the screen (or crop, stretch, center)
@@ -51,6 +53,7 @@ FROM A TERMINAL
   zmural-console rescan              pick up files you just added
   zmural-console autostart on|off|status
   zmural-console help                everything it can do
+  zmural-console version             which zmural this is
   zmural-console quit
 
 FILES

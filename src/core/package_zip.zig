@@ -557,11 +557,15 @@ pub const ZipWriter = struct {
     }
 
     /// From "version needed" to the name's length, the same in both records.
+    const dos_epoch: u32 = 1 << 5 | 1; // year 1980 + 0, month 1, day 1
+
     fn header(w: *Io.Writer, version: u16, crc: u32, size: u32, name_len: u16) !void {
         try w.writeInt(u16, version, .little);
         try w.writeInt(u16, 0, .little); // flags
         try w.writeInt(u16, 0, .little); // stored
-        try w.writeInt(u32, 0, .little); // time, date
+        // 1980-01-01 00:00, the earliest date a zip can hold: all zeros
+        // read as month 0, day 0, which tools show as an invalid date.
+        try w.writeInt(u32, dos_epoch << 16, .little); // time, date
         try w.writeInt(u32, crc, .little);
         try w.writeInt(u32, size, .little); // compressed
         try w.writeInt(u32, size, .little);

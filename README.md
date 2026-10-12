@@ -154,11 +154,11 @@ Use **Uninstall** on the settings window's General page, or run `zmural-console 
 
 ## Troubleshooting
 
-**zmural says it stopped unexpectedly.** The notification includes a line like `zmural 0.1.0 linux crash: 1216a76 10fab48`. To report it, post that line; it's also near the end of zmural's log, which the settings window's General page opens. zmural never sends anything anywhere itself.
+**zmural says it stopped unexpectedly.** The notification includes a line like `zmural <version> linux crash: 1216a76 10fab48`. To report it, post that line; it's also near the end of zmural's log, which the settings window's General page opens. zmural never sends anything anywhere itself.
 
 **Nothing shows on Linux.** zmural only plays live wallpapers in a Wayland session. On X11, or on a desktop older than the ones under [What you need](#what-you-need), it says what's missing and sets your wallpaper as a still picture instead. The settings window needs Wayland too, so on X11 use `zmural-console`. To see which session you're in, run `echo $XDG_SESSION_TYPE` (`wayland` or `x11`); most desktops let you choose at the login screen, and KDE Plasma 6 and GNOME use Wayland by default.
 
-**"No file picker available" (Linux).** Add folder and Open file use your desktop's file picker through xdg-desktop-portal. KDE Plasma and GNOME have it; on Sway and other minimal desktops install `xdg-desktop-portal` and `xdg-desktop-portal-gtk`. `zmural-console apply` and `import` work without it.
+**"No file picker available" (Linux).** Add folder and Open file use your desktop's file picker through xdg-desktop-portal. KDE Plasma and GNOME have it; on Sway and other minimal desktops install `xdg-desktop-portal` and `xdg-desktop-portal-gtk`, and have your session set `XDG_CURRENT_DESKTOP` (e.g. `XDG_CURRENT_DESKTOP=sway`), which the portal uses to pick its backend. `zmural-console apply` and `import` work without it.
 
 **No tray icon on GNOME.** Install and turn on the AppIndicator extension. The settings window still opens from the app menu.
 
