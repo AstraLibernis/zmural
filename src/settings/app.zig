@@ -108,6 +108,10 @@ const Known = struct {
     next_change_s: u32 = 0,
     /// The line to report for this run's last crash ("" when none).
     crash: []const u8 = "",
+    /// The first pause rule holding the wallpaper now ("" when none), by
+    /// condition name (`status`'s `paused_by`).
+    paused_by: [24]u8 = undefined,
+    paused_by_len: usize = 0,
     library: []const []const u8 = &.{},
     library_total: u32 = 0,
     /// The connected monitors, in zmural's order.
@@ -270,6 +274,9 @@ fn refreshStatus() void {
     }
     app.known.paused = st.paused;
     app.known.muted = st.muted;
+    const first = std.mem.sliceTo(st.paused_by, ',');
+    app.known.paused_by_len = @min(first.len, app.known.paused_by.len);
+    @memcpy(app.known.paused_by[0..app.known.paused_by_len], first[0..app.known.paused_by_len]);
     app.known.rotate_minutes = st.rotate_minutes;
     app.known.order = st.order;
     app.known.next_change_s = st.next_change_s;
@@ -698,6 +705,27 @@ fn drawSidebar() void {
     if (ui.size.y > 480 + top) drawNowPlaying();
 }
 
+/// What the player card says while a pause rule holds the wallpaper (the
+/// user didn't pause it), from the rule's condition name; null when none does.
+fn heldBy(condition: []const u8) ?[]const u8 {
+    if (condition.len == 0) return null;
+    const words = .{
+        .{ "fullscreen", "Paused: an app is fullscreen" },
+        .{ "maximized", "Paused: a window is maximized" },
+        .{ "covered", "Paused: windows cover it" },
+        .{ "focused", "Paused: a window has focus" },
+        .{ "app_rule", "Paused: a listed app is in front" },
+        .{ "on_battery", "Paused: on battery" },
+        .{ "power_saver", "Paused: power saver is on" },
+        .{ "session_locked", "Paused: the screen is locked" },
+        .{ "session_inactive", "Paused: another session is in front" },
+        .{ "remote_session", "Paused: a remote session" },
+        .{ "game_mode", "Paused: a game is running" },
+    };
+    inline for (words) |w| if (std.mem.eql(u8, condition, w[0])) return w[1];
+    return "Paused for now";
+}
+
 fn drawNowPlaying() void {
     const ui = &app.ui;
     const p = ui.pal;
@@ -712,7 +740,7 @@ fn drawNowPlaying() void {
 
     const name = if (!online) "zmural isn't running" else if (k.wallpaper.len == 0) "Nothing showing" else zmural.media.displayName(k.wallpaper);
     ui.text(.{ .x = card.x + 12, .y = thumb.bottom() + 6, .w = card.w - 24, .h = 20 }, name, .body_strong, .left, p.text);
-    const state = if (!online) "Press Start zmural to bring it back" else if (k.wallpaper.len == 0) "Click a wallpaper to show it" else if (k.paused) "Paused" else if (k.muted) "Playing, muted" else "Playing";
+    const state = if (!online) "Press Start zmural to bring it back" else if (k.wallpaper.len == 0) "Click a wallpaper to show it" else if (k.paused) "Paused" else if (heldBy(k.paused_by[0..k.paused_by_len])) |why| why else if (k.muted) "Playing, muted" else "Playing";
     ui.text(.{ .x = card.x + 12, .y = thumb.bottom() + 24, .w = card.w - 24, .h = 16 }, state, .caption, .left, p.text2);
 
     if (!online) return;
@@ -1438,4 +1466,15 @@ test "a slider position becomes a value on the property's step, as short text" {
     try std.testing.expectEqualStrings("37", at(level, 0.6849));
     // Past the ends stays inside the range.
     try std.testing.expectEqualStrings("100", at(level, 1.4));
+}
+
+test "the player card says which rule holds the wallpaper" {
+    try std.testing.expectEqual(@as(?[]const u8, null), heldBy(""));
+    try std.testing.expectEqualStrings("Paused: windows cover it", heldBy("covered").?);
+    try std.testing.expectEqualStrings("Paused: a game is running", heldBy("game_mode").?);
+    try std.testing.expectEqualStrings("Paused for now", heldBy("something_new").?);
+    // Every condition a rule can pause for has its own words.
+    inline for (@typeInfo(policy.Condition).@"enum".fields) |f| {
+        if (comptime !std.mem.eql(u8, f.name, "other_audio")) try std.testing.expect(!std.mem.eql(u8, heldBy(f.name).?, "Paused for now"));
+    }
 }
