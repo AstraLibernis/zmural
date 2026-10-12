@@ -97,4 +97,19 @@ wait $REAPER 2>/dev/null
 check "…and still removes everything when its children die with it" "! alive $ZD && none_there ${added[*]} && all_there ${kept[*]}"
 kill $SWAY 2>/dev/null
 
+# 4. The settings folder is one the user goes into: a file of theirs there
+#    stays (and the folder with it), and the report says so.
+setup
+echo "my own notes" >"$HOME/.config/zmural/my-notes.txt"
+"$BIN/zmural-console" uninstall --yes >"$W/own.txt" 2>&1; rc=$?
+check "a file of the user's in zmural's settings folder stays, the rest goes (rc=$rc)" "[ $rc = 0 ] && [ -f $HOME/.config/zmural/my-notes.txt ] && [ ! -e $HOME/.config/zmural/settings.toml ] && grep -q \"kept .*zmural, which holds files zmural didn't make\" $W/own.txt"
+kill $SWAY 2>/dev/null; sleep 0.5; rm -rf "$HOME/.config/zmural"
+
+# 5. Something that can't be removed: said, not "removed".
+setup
+mkdir -p "$HOME/.cache/zmural/thumbs"; echo x >"$HOME/.cache/zmural/thumbs/t.png"; chmod 555 "$HOME/.cache/zmural/thumbs"
+"$BIN/zmural-console" uninstall --yes >"$W/stuck.txt" 2>&1; rc=$?
+check "a folder that can't be removed: uninstall says so and exits 1 (rc=$rc)" "[ $rc = 1 ] && grep -q \"couldn't remove its still pictures\" $W/stuck.txt && grep -q \"Some things couldn't be removed\" $W/stuck.txt"
+chmod 755 "$HOME/.cache/zmural/thumbs"; kill $SWAY 2>/dev/null
+
 [ $FAIL = 0 ] && echo "all passed" || { echo "FAILED; files in $W"; exit 1; }

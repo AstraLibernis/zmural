@@ -68,7 +68,7 @@ pub fn run(init: std.process.Init, opts: Options) !u8 {
     r.line("Not touched: your wallpapers and the folders they are in.", .{});
     r.line("To finish, delete zmural's own folder: {s}", .{programFolder(arena, io, exe_dir)});
     if (r.failed) r.line("Some things couldn't be removed (above); delete them by hand if you like.", .{});
-    show(gpa, io, env, opts, r.text());
+    show(gpa, io, env, opts, r.text(), r.failed);
     return if (r.failed) 1 else 0;
 }
 
@@ -183,7 +183,7 @@ fn removeLinux(gpa: std.mem.Allocator, arena: std.mem.Allocator, io: std.Io, env
         try std.fs.path.join(arena, &.{ c, "zmural" })
     else
         try std.fs.path.join(arena, &.{ home, ".config", "zmural" });
-    removeTree(io, config, "its settings", r);
+    removeOwn(io, config, "its settings", r);
     var state_buf: [512]u8 = undefined;
     if (zmural.os.logfile_linux.dir(&state_buf, env)) |state| {
         if (!std.mem.eql(u8, state, config)) removeTree(io, state, "its log and state", r);
@@ -210,7 +210,7 @@ fn removeWindows(arena: std.mem.Allocator, io: std.Io, env: *const std.process.E
         if (gone.shortcut) r.line("removed the Start menu shortcut", .{});
         if (gone.entry) r.line("removed it from Settings > Apps", .{});
     }
-    if (env.get("APPDATA")) |base| removeTree(io, try std.fs.path.join(arena, &.{ base, "zmural" }), "its settings", r);
+    if (env.get("APPDATA")) |base| removeOwn(io, try std.fs.path.join(arena, &.{ base, "zmural" }), "its settings", r);
     // The log, and each web wallpaper's browser profile.
     if (env.get("LOCALAPPDATA")) |base| removeTree(io, try std.fs.path.join(arena, &.{ base, "zmural" }), "its log and web wallpaper data", r);
 }
@@ -227,6 +227,37 @@ fn removeFile(io: std.Io, path: []const u8, what: []const u8, r: *Report) void {
     r.line("removed {s}", .{what});
 }
 
+/// The settings folder is one the user goes into (settings.toml is edited
+/// by hand): only what zmural put there goes, and the folder if nothing
+/// else is left in it. Anything of the user's stays, and the report says so.
+fn removeOwn(io: std.Io, dir_path: []const u8, what: []const u8, r: *Report) void {
+    const cwd = std.Io.Dir.cwd();
+    var dir = cwd.openDir(io, dir_path, .{}) catch return; // not there
+    for ([_][]const u8{ "settings.toml", "settings.toml.tmp" }) |name| {
+        dir.deleteFile(io, name) catch |err| switch (err) {
+            error.FileNotFound => {},
+            else => {
+                r.line("couldn't remove {s} in {s}: {s}", .{ name, dir_path, @errorName(err) });
+                r.failed = true;
+            },
+        };
+    }
+    dir.deleteTree(io, "properties") catch |err| {
+        r.line("couldn't remove the wallpapers' saved properties ({s}/properties): {s}", .{ dir_path, @errorName(err) });
+        r.failed = true;
+    };
+    dir.close(io);
+    cwd.deleteDir(io, dir_path) catch |err| switch (err) {
+        error.DirNotEmpty => return r.line("removed {s}; kept {s}, which holds files zmural didn't make", .{ what, dir_path }),
+        else => {
+            r.line("couldn't remove {s} ({s}): {s}", .{ what, dir_path, @errorName(err) });
+            r.failed = true;
+            return;
+        },
+    };
+    r.line("removed {s} ({s})", .{ what, dir_path });
+}
+
 fn removeTree(io: std.Io, path: []const u8, what: []const u8, r: *Report) void {
     const cwd = std.Io.Dir.cwd();
     cwd.access(io, path, .{}) catch return; // not there
@@ -239,7 +270,7 @@ fn removeTree(io: std.Io, path: []const u8, what: []const u8, r: *Report) void {
 }
 
 /// The report: on the terminal, or where the settings window's user sees it.
-fn show(gpa: std.mem.Allocator, io: std.Io, env: *const std.process.Environ.Map, opts: Options, text: []const u8) void {
+fn show(gpa: std.mem.Allocator, io: std.Io, env: *const std.process.Environ.Map, opts: Options, text: []const u8, failed: bool) void {
     _ = io;
     if (!opts.from_window) return say(text);
     switch (builtin.os.tag) {
@@ -247,7 +278,7 @@ fn show(gpa: std.mem.Allocator, io: std.Io, env: *const std.process.Environ.Map,
             const w = zmural.os.win32;
             const wide = std.unicode.wtf8ToWtf16LeAllocZ(gpa, text) catch return;
             defer gpa.free(wide);
-            _ = w.MessageBoxW(null, wide, w.L("zmural was removed"), 0x40); // MB_ICONINFORMATION
+            _ = w.MessageBoxW(null, wide, if (failed) w.L("zmural was removed, but not all of it") else w.L("zmural was removed"), if (failed) 0x30 else 0x40); // MB_ICONWARNING / MB_ICONINFORMATION
         },
         .linux => {
             var bus = zmural.os.dbus.Conn.session(env.get("DBUS_SESSION_BUS_ADDRESS"), zmural.os.xdg.dir(env.get("XDG_RUNTIME_DIR"))) catch return say(text);
@@ -255,7 +286,10 @@ fn show(gpa: std.mem.Allocator, io: std.Io, env: *const std.process.Environ.Map,
             // The summary only: a notification isn't a place for the whole list.
             const finish = std.mem.find(u8, text, "To finish,") orelse 0;
             const end = std.mem.findScalarPos(u8, text, finish, '\n') orelse text.len;
-            _ = bus.notify("zmural", "preferences-desktop-wallpaper", "zmural was removed", text[finish..end]) catch return say(text);
+            // What couldn't be removed is what the user must know first.
+            const title = if (failed) "zmural was removed, but not all of it" else "zmural was removed";
+            const body = if (failed) "Some of its files couldn't be removed. Run zmural-console uninstall in a terminal to see which." else text[finish..end];
+            _ = bus.notify("zmural", "preferences-desktop-wallpaper", title, body) catch return say(text);
         },
         else => say(text),
     }
