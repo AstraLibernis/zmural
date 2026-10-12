@@ -30,10 +30,9 @@ behind it, not the control. What only a real desktop can show is said plainly in
 From the blind test of 0.1.0 ([notes/blind-test-2026-10-12.md](../notes/blind-test-2026-10-12.md))
 and the controls inventory ([CONTROLS.md](CONTROLS.md)), which found controls no test had pressed.
 
-**Where it stands (end of 2026-10-12):** everything here is done on Linux except the Windows pass,
-which waits for the maintainer. The draft release v0.1.1 on GitHub was built from b53d896, before
-the adversarial test's fixes: run CI by hand on `main` to rebuild it before the Windows pass. See
-[notes/stopping-point-2026-10-12.md](../notes/stopping-point-2026-10-12.md).
+**Where it stands (end of 2026-10-12):** done on both OSes; the Windows pass passed on the draft
+rebuilt from `main`. Left before tagging: the Linux rigs not re-run since the last commits, and the
+tarball checks ([notes/stopping-point-2026-10-12.md](../notes/stopping-point-2026-10-12.md)).
 
 - [x] Zip bombs refused by ratio, and a zip capped at 4 GiB (fd39888)
 - [x] **Tray right-click on swaybar** (it calls `ContextMenu` and can't show the menu): opens the settings window (owner's choice, 2026-10-12). `tools/tray-test.sh` clicks swaybar's real icon, left and right, with a virtual pointer; the right-click step fails with the old no-op. Plasma's tray unchanged (`kde-test`, 20 of 20)
@@ -41,7 +40,7 @@ the adversarial test's fixes: run CI by hand on `main` to rebuild it before the 
 - [x] **Uninstall from the window:** gone 51 ms after Yes (was 5.1 s: the window asked the quitting zmural for its settings and waited out the request); the dialog draws both buttons before either acts, so no frame shows a lone "Yes". `tools/uninstall-test.sh` times it (fails at 5124 ms with the old code); the "zmural was removed" notification is the sign it worked
 - [x] **A test desktop like a user's:** Sway with two outputs, a session bus, a notification daemon, a file manager and an opener (`controls-test.sh`; swaybar's tray in `tray-test.sh`, `soak-test.sh`)
 - [x] **Every settings-window control pressed with real input, its effect checked:** `tools/controls-test.sh`, 92 presses and 81 checks over every page, the player card, the tile menu (two monitors) and the confirm dialogs. The window writes where it drew each control (`ZMURAL_TEST_CONTROLS`); file pickers are answered by `ZMURAL_TEST_PICK`. Two controls broken on purpose fail 3 checks. It found no new bug
-- [ ] **A Windows pass:** [WINDOWS-PASS.md](WINDOWS-PASS.md), by hand, on a real Windows 11 desktop, recorded in `notes/` (the window hasn't been looked at on Windows since it moved into zmural, and this release's Windows changes are compiled only)
+- [x] **A Windows pass:** [WINDOWS-PASS.md](WINDOWS-PASS.md) on a real Windows 11 desktop by a blind tester (2026-10-12, [notes/windows-pass-2026-10-12.md](../notes/windows-pass-2026-10-12.md)): 41 of 45 lines pass, 3 N/A; the fail (no trace of the start-with-Windows balloon under Do Not Disturb) fixed by logging every balloon; the docs' update steps fixed for the versioned zip folder
 - [x] Small bugs from the blind test:
   - [x] `zmural-console apply` waits until the wallpaper shows (about 0.2 s) or zmural says it can't, and then exits 1 with the renderer's reason; a file fixed after failing gets a fresh try. `status` carries what last played and what last failed. `tools/broken-test.sh` (each part mutation-checked); Windows compiled
   - [x] `zmural-console export <name>` takes a library name too (a file's or a package's, as `status` names them; two of the same name ask for the path). `tools/import-test.sh`
@@ -75,6 +74,7 @@ Stability and the loose ends of what exists, before anything new.
 - [ ] The soak test on Windows (a runner can do the CLI part; the window needs a desktop)
 - [ ] A week of daily use on both OSes: sleep and resume (no rig can suspend), real monitor hotplug, a real GPU's driver resets
 - [ ] Two real monitors on Windows, once someone has them
+- [ ] From the 0.1.1 Windows pass: long library paths and descriptions cut off (rows at the default size; stack the control under its label when narrow); Show in folder once missed the selection; pickers start in the working folder (System32), not the library; the Stop rule shows as "Paused"; a late can't-show notice after a quick re-apply names the wrong case; Prism.webm has no cue index (mpv warns)
 
 ## 0.3: Monitors, and dropping files in
 

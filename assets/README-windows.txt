@@ -61,9 +61,10 @@ FILES
   Log:       %LOCALAPPDATA%\zmural\zmural.log
 
 UPDATING
-  Quit zmural (tray menu > Quit zmural), unzip the new version over this
-  folder, replacing its files, and start zmural.exe again. Your settings and
-  library are kept.
+  Quit zmural (tray menu > Quit zmural) and unzip the new version next to
+  this folder; it makes a folder named after the new version. Start zmural.exe
+  from there (start with Windows, the Start menu and Settings > Apps follow
+  it), then delete this folder. Your settings and library are kept.
 
 UNINSTALL
   Press Uninstall on the settings window's General page, or in Windows

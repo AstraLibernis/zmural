@@ -141,8 +141,9 @@ On Linux, run these as `bin/zmural-console` from zmural's folder.
 ## Updating
 
 1. Quit zmural (tray menu > Quit, or `zmural-console quit`).
-2. Unpack the new zip or tarball over the old folder, replacing its files.
-3. Start zmural again.
+2. Unpack the new zip or tarball next to the old one. It makes a folder named after the new version.
+3. Start zmural from the new folder. Start at login and the menu entries follow it (on Windows also Settings > Apps).
+4. Delete the old folder.
 
 Your settings and library are kept. On KDE Plasma and GNOME, zmural updates its own plugin or extension when it starts; on GNOME the new extension runs from your next login.
 

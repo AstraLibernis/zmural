@@ -85,9 +85,10 @@ VIDEO DECODING
   installs codecs or drivers itself.
 
 UPDATING
-  Quit zmural (bin/zmural-console quit), extract the new version over this
-  folder, replacing its files, and run bin/zmural again. Your settings and
-  library are kept; on KDE Plasma and GNOME zmural updates its own plugin or
+  Quit zmural (bin/zmural-console quit) and extract the new version next to
+  this folder; it makes a folder named after the new version. Run bin/zmural
+  from there (start at login and the app menu entry follow it), then delete
+  this folder. Your settings and library are kept; on KDE Plasma and GNOME zmural updates its own plugin or
   extension when it starts (on GNOME it runs from your next login).
 
 UNINSTALL
