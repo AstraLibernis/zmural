@@ -12,6 +12,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const zmural = @import("zmural");
+const words = @import("words.zig");
 const control = zmural.protocol.control;
 const pz = zmural.package_zip;
 
@@ -67,7 +68,7 @@ pub fn run(init: std.process.Init, out: *std.Io.Writer, args: []const []const u8
     // (Videos/Wallpapers), which it always scans.
     const target = if (to) |t| try client.absolutePath(arena, t) else blk: {
         const c = daemon orelse fail(3, "zmural isn't running, so its library folders aren't known: start it, or give --to <folder>", .{});
-        const ev = c.request(.get_settings) catch |err| fail(1, "zmural didn't answer ({s})", .{@errorName(err)});
+        const ev = c.request(.get_settings) catch |err| fail(1, "zmural didn't answer ({s})", .{words.of(err)});
         if (ev != .settings) fail(1, "zmural didn't send its folders", .{});
         var dirs = std.mem.splitScalar(u8, ev.settings.default_dirs, control.list_sep);
         const first = dirs.first();
@@ -76,7 +77,7 @@ pub fn run(init: std.process.Init, out: *std.Io.Writer, args: []const []const u8
     };
 
     const cwd = std.Io.Dir.cwd();
-    const file = cwd.openFile(io, path, .{}) catch |err| fail(1, "can't open {s} ({s})", .{ path, @errorName(err) });
+    const file = cwd.openFile(io, path, .{}) catch |err| fail(1, "can't open {s} ({s})", .{ path, words.of(err) });
     defer file.close(io);
     var read_buf: [64 * 1024]u8 = undefined;
     var fr = file.reader(io, &read_buf);
@@ -84,17 +85,41 @@ pub fn run(init: std.process.Init, out: *std.Io.Writer, args: []const []const u8
     var diag: pz.Diagnostic = .{};
     const checked = pz.check(arena, &fr, .{}, &diag) catch |err| refuse(path, err, &diag);
 
-    cwd.createDirPath(io, target) catch |err| fail(1, "can't make {s} ({s})", .{ target, @errorName(err) });
-    var parent = cwd.openDir(io, target, .{}) catch |err| fail(1, "can't open {s} ({s})", .{ target, @errorName(err) });
+    // A failed import leaves nothing behind, folders it had to make included:
+    // the topmost one that wasn't there yet is where removing stops.
+    var made_from: ?[]const u8 = null;
+    {
+        var p: ?[]const u8 = target;
+        while (p) |dir| : (p = std.fs.path.dirname(dir)) {
+            if (cwd.openDir(io, dir, .{})) |d| {
+                d.close(io);
+                break;
+            } else |_| made_from = dir;
+        }
+    }
+    cwd.createDirPath(io, target) catch |err| fail(1, "can't make {s} ({s})", .{ target, words.of(err) });
+    var parent = cwd.openDir(io, target, .{}) catch |err| fail(1, "can't open {s} ({s})", .{ target, words.of(err) });
     defer parent.close(io);
     const name = pz.folderName(path, checked);
-    const made = pz.unpack(arena, io, &fr, checked, parent, name, &diag) catch |err| refuse(path, err, &diag);
+    const made = pz.unpack(arena, io, &fr, checked, parent, name, &diag) catch |err| {
+        // Closed first (Windows won't remove an open folder); `refuse` exits,
+        // so the deferred close never runs.
+        parent.close(io);
+        if (made_from) |top| {
+            var p: ?[]const u8 = target;
+            while (p) |dir| : (p = std.fs.path.dirname(dir)) {
+                cwd.deleteDir(io, dir) catch break; // zsnag:ok — only an empty folder goes; anything else stays
+                if (std.mem.eql(u8, dir, top)) break;
+            }
+        }
+        refuse(path, err, &diag);
+    };
     const folder = try std.fs.path.join(arena, &.{ target, made.name });
     if (windows) {
         // Unmarked, the files would lose a warning they should have: undo it.
         const unmarked = markLikeZip(arena, io, path, folder) catch 1;
         if (unmarked > 0) {
-            parent.deleteTree(io, made.name) catch |err| fail(1, "{s}: its files couldn't be marked as downloaded, nor the folder removed ({s}): delete {s}", .{ path, @errorName(err), folder });
+            parent.deleteTree(io, made.name) catch |err| fail(1, "{s}: its files couldn't be marked as downloaded, nor the folder removed ({s}): delete {s}", .{ path, words.of(err), folder });
             fail(1, "not imported: {s}: its files couldn't be marked as downloaded, as the zip is", .{path});
         }
     }
@@ -127,7 +152,7 @@ pub fn run(init: std.process.Init, out: *std.Io.Writer, args: []const []const u8
     };
     _ = c.request(.rescan) catch {}; // zsnag:ok — the wallpaper is unpacked either way; a rescan only lists it sooner
     if (apply) if (show) |p| {
-        switch (c.request(.{ .apply = .{ .path = p } }) catch |err| fail(1, "zmural didn't answer ({s})", .{@errorName(err)})) {
+        switch (c.request(.{ .apply = .{ .path = p } }) catch |err| fail(1, "zmural didn't answer ({s})", .{words.of(err)})) {
             .ok => try out.print("showing {s}\n", .{p}),
             .failed => |f| fail(1, "zmural didn't show it: {s}", .{f.message}),
             else => {},
@@ -152,7 +177,7 @@ pub fn runExport(init: std.process.Init, out: *std.Io.Writer, args: []const []co
     var diag: pz.Diagnostic = .{};
     const res = pz.exportTo(init.gpa, init.io, source, dest, .{}, &diag) catch |err| {
         if (diag.name().len > 0) fail(1, "not exported: {s} ('{s}')", .{ pz.describe(err), diag.name() });
-        if (diag.cause) |c| fail(1, "not exported: {s} ({s})", .{ pz.describe(err), @errorName(c) });
+        if (diag.cause) |c| fail(1, "not exported: {s} ({s})", .{ pz.describe(err), words.of(c) });
         fail(1, "not exported: {s}", .{pz.describe(err)});
     };
     try out.print("exported {d} file{s} ({Bi:.1}) to {s}\n", .{ res.files, if (res.files == 1) "" else "s", res.bytes, dest });
@@ -171,7 +196,7 @@ fn fromLibrary(init: std.process.Init, name: []const u8) !?[]const u8 {
     var found: std.ArrayList([]const u8) = .empty;
     var offset: u32 = 0;
     while (true) {
-        const ev = c.request(.{ .library = .{ .offset = offset } }) catch |err| fail(1, "zmural didn't answer ({s})", .{@errorName(err)});
+        const ev = c.request(.{ .library = .{ .offset = offset } }) catch |err| fail(1, "zmural didn't answer ({s})", .{words.of(err)});
         if (ev != .library) break;
         var it = std.mem.splitScalar(u8, ev.library.paths, control.list_sep);
         var got: u32 = 0;
@@ -271,10 +296,10 @@ fn refuse(path: []const u8, err: pz.Error, diag: *const pz.Diagnostic) noreturn 
     report("error {s} wasn't imported: {s}", .{ std.fs.path.basename(path), pz.describe(err) });
     report_path = null;
     if (diag.name().len > 0) {
-        if (diag.cause) |c| fail(1, "not imported: {s}: {s} ('{s}', {s})", .{ path, pz.describe(err), diag.name(), @errorName(c) });
+        if (diag.cause) |c| fail(1, "not imported: {s}: {s} ('{s}', {s})", .{ path, pz.describe(err), diag.name(), words.of(c) });
         fail(1, "not imported: {s}: {s} ('{s}')", .{ path, pz.describe(err), diag.name() });
     }
-    if (diag.cause) |c| fail(1, "not imported: {s}: {s} ({s})", .{ path, pz.describe(err), @errorName(c) });
+    if (diag.cause) |c| fail(1, "not imported: {s}: {s} ({s})", .{ path, pz.describe(err), words.of(c) });
     fail(1, "not imported: {s}: {s}", .{ path, pz.describe(err) });
 }
 

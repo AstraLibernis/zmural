@@ -98,6 +98,21 @@ for zf in escape absolute backslash link lively-program nothing not-a-zip; do
   check "refused: $zf.zip (exit $rc: $reason)" "[ $rc = 1 ] && grep -q 'not imported' $W/out.txt"
 done
 check "…and none of them wrote a single file, inside the library or out of it" "[ \"\$(tree)\" = \"\$snap\" ] && [ ! -e $HOME/.config/autostart/evil.desktop ] && [ ! -e /tmp/zmural-import-test/evil.png ]"
+# A zip that passes the first look but is damaged inside (a file fails its
+# checksum), imported into a folder that isn't there yet: that folder too is gone.
+python3 - "$W/zips/crcbad.zip" <<'PY'
+import sys, zipfile
+p = sys.argv[1]
+with zipfile.ZipFile(p, "w", zipfile.ZIP_STORED) as z: z.writestr("a.png", b"x" * 64)
+b = bytearray(open(p, "rb").read()); i = b.find(b"x" * 64); b[i] = ord("y"); open(p, "wb").write(bytes(b))
+PY
+rc=$(imp "$W/zips/crcbad.zip" --to "$W/fresh/new")
+check "a damaged zip into a folder it made: refused, and the folder is gone too (exit $rc)" "[ $rc = 1 ] && grep -q 'damaged' $W/out.txt && [ ! -e $W/fresh ]"
+# A package whose type and file disagree, said in words.
+mkdir -p "$W/mis"; cp "$V/green.png" "$W/mis/clip.webm" 2>/dev/null || magick -size 8x8 xc:green "$W/mis/clip.webm"
+printf 'title = "Mis"\ntype = "image"\nentry = "clip.webm"\n' >"$W/mis/zmural.toml"; (cd "$W" && zip -qr zips/mis.zip mis)
+rc=$(imp "$W/zips/mis.zip" --to "$W/fresh")
+check "a package saying image but naming a video: refused in words (exit $rc: $(sed 's/.*: //' $W/out.txt | head -c 70))" "[ $rc = 1 ] && grep -q \"type doesn't match the file it names\" $W/out.txt"
 check "…nor left a hidden folder behind" "! ls -a $V | grep -q '^\.zmural-import'"
 check "zmural was never disturbed by them" "kill -0 $ZD && z status >/dev/null"
 

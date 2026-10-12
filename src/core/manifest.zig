@@ -28,6 +28,7 @@
 //! Strings in the result live in the arena `parse` is given.
 
 const std = @import("std");
+const media = @import("media.zig");
 const toml = @import("toml.zig");
 
 pub const file_name = "zmural.toml";
@@ -94,6 +95,8 @@ pub const Error = toml.Error || error{
     UnknownTable,
     MissingField,
     UnsafeEntry,
+    /// `type` says one kind and `entry` names another (an image's .webm).
+    EntryNotType,
     InvalidProperty,
     TooManyProperties,
 };
@@ -148,6 +151,7 @@ pub fn parse(arena: std.mem.Allocator, src: []const u8, diag: ?*Diagnostic) Erro
     m.kind = kind orelse return error.MissingField;
     m.entry = entry orelse return error.MissingField;
     if (!safeEntry(m.entry)) return error.UnsafeEntry;
+    if (!entryFits(m.kind, m.entry)) return error.EntryNotType;
     const out = try arena.alloc(Property, props.items.len);
     for (props.items, out) |p, *o| o.* = try p.finish();
     m.properties = out;
@@ -156,6 +160,26 @@ pub fn parse(arena: std.mem.Allocator, src: []const u8, diag: ?*Diagnostic) Erro
 
 /// A plain relative path that stays inside the package folder: no drive, no
 /// leading slash, no `..`, no stream (`:`), nothing empty.
+/// The entry doesn't plainly belong to another kind: a video's file isn't a
+/// picture or a page, a picture's isn't a video or a page, a page is .html.
+/// An extension zmural doesn't list is left to the player.
+fn entryFits(kind: Kind, entry: []const u8) bool {
+    const is_web = for (media.web_exts) |e| {
+        if (std.ascii.endsWithIgnoreCase(entry, e)) break true;
+    } else false;
+    return switch (kind) {
+        .web => is_web,
+        .video => !is_web and !(media.isImage(entry) and !std.ascii.endsWithIgnoreCase(entry, ".gif")),
+        .image => !is_web and !media.isVideo(entry),
+    };
+}
+
+test entryFits {
+    try std.testing.expect(entryFits(.image, "a.png") and entryFits(.image, "a.gif") and entryFits(.video, "a.webm") and entryFits(.web, "i.html"));
+    try std.testing.expect(entryFits(.video, "a.mpg") and entryFits(.video, "a.gif")); // not listed, or an animation: the player decides
+    try std.testing.expect(!entryFits(.image, "clip.webm") and !entryFits(.video, "still.png") and !entryFits(.web, "a.png") and !entryFits(.image, "i.html"));
+}
+
 pub fn safeEntry(entry: []const u8) bool {
     if (entry.len == 0 or entry.len > 260) return false;
     if (entry[0] == '/' or entry[0] == '\\') return false;

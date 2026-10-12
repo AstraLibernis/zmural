@@ -112,8 +112,8 @@ pub fn describe(err: Error) []const u8 {
         error.UnsupportedCompression => "it uses a compression zmural can't read (only stored and deflate)",
         error.BadName => "a name in it could land outside its folder or means something else on another system",
         error.NameEncoding => "a file name in it isn't UTF-8 (an older zip tool made it); zip the files again with a newer one",
-        error.SameName => "two files in it would get the same name here (they differ only in upper and lower case)",
-        error.Link => "it holds a link, and links aren't unpacked",
+        error.SameName => "two files in it would get the same name here (the same name twice, or names that differ only in upper and lower case)",
+        error.Link => "it holds a link, and zmural neither packs nor unpacks links",
         error.TooManyFiles => "it holds too many files and folders",
         error.TooLarge => "its files add up to too much",
         error.Overlap => "its files overlap inside it, a trick that makes a small zip unpack into a huge one",
@@ -401,7 +401,12 @@ fn crcOf(io: Io, dir: Io.Dir, path: []const u8, diag: *Diagnostic) Error!u32 {
 fn checkManifest(arena: std.mem.Allocator, io: Io, dest: Io.Dir, root: []const u8, diag: *Diagnostic) Error!void {
     const path = if (root.len > 0) try std.fs.path.join(arena, &.{ root, media.package_manifest }) else media.package_manifest;
     diag.set(path);
-    const text = dest.readFileAlloc(io, path, arena, .limited(256 * 1024)) catch |err| return cantWrite(diag, err);
+    const text = dest.readFileAlloc(io, path, arena, .limited(256 * 1024)) catch |err| {
+        // Too large to be one is no zmural.toml either: say that, not "can't be read".
+        if (err != error.StreamTooLong) return cantWrite(diag, err);
+        diag.cause = err;
+        return error.BadManifest;
+    };
     const m = manifest.parse(arena, text, null) catch |err| {
         diag.cause = err;
         return error.BadManifest;
@@ -442,6 +447,11 @@ fn fromLively(arena: std.mem.Allocator, io: Io, dest: Io.Dir, root: []const u8, 
     const props = readTop(arena, io, dest, root, lively.properties_file) catch null;
     const c = lively.convert(arena, info, props, title) catch |err| return switch (err) {
         error.OutOfMemory => error.OutOfMemory,
+        error.LivelyBadProperties => {
+            // It's the properties file that is wrong, not the info file.
+            diag.set(std.fs.path.join(arena, &.{ root, lively.properties_file }) catch lively.properties_file);
+            return error.LivelyBadProperties;
+        },
         else => |e| e,
     };
     const out = try std.fs.path.join(arena, &.{ root, media.package_manifest });

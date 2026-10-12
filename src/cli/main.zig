@@ -7,6 +7,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const zmural = @import("zmural");
+const words = @import("words.zig");
 const control = zmural.protocol.control;
 const Request = control.Request;
 
@@ -53,6 +54,8 @@ pub fn parse(args: []const []const u8) ParseError!Request {
     if (args.len == 0) return error.MissingCommand;
     const cmd = args[0];
     const rest = args[1..];
+    // `version` alone is answered before parsing; with more after it, it lands here.
+    if (eql(cmd, "version") or eql(cmd, "--version")) return error.UnexpectedArgument;
 
     if (eql(cmd, "status")) return noArgs(rest, .status);
     if (eql(cmd, "rescan")) return noArgs(rest, .rescan);
@@ -167,7 +170,7 @@ pub fn main(init: std.process.Init) !void {
         try out.writeAll(usage);
         return out.flush();
     }
-    if (args.len > 0 and (eql(args[0], "version") or eql(args[0], "--version"))) {
+    if (args.len == 1 and (eql(args[0], "version") or eql(args[0], "--version"))) {
         try out.print("zmural-console {s}\n", .{zmural.version});
         return out.flush();
     }
@@ -178,7 +181,11 @@ pub fn main(init: std.process.Init) !void {
     if (args.len > 0 and eql(args[0], "export")) return @import("import.zig").runExport(init, out, args[1..]);
 
     var req = parse(args) catch |err| {
-        std.log.err("zmural-console: {s}; see `zmural-console help`", .{@errorName(err)});
+        const hint: []const u8 = if (args.len > 0 and eql(args[0], "rotate") and err == error.BadValue)
+            std.fmt.comptimePrint(": minutes from 1 to {d}, or off", .{control.max_rotate_minutes})
+        else
+            "";
+        std.log.err("zmural-console: {s}{s}; see `zmural-console help`", .{ words.of(err), hint });
         std.process.exit(2);
     };
     if (builtin.os.tag == .linux) return runLinux(init, out, req);
@@ -206,7 +213,7 @@ pub fn main(init: std.process.Init) !void {
     defer c.close(init.gpa);
 
     const reply = c.request(req) catch |err| {
-        std.log.err("zmural-console: zmural stopped answering ({s}); try again", .{@errorName(err)});
+        std.log.err("zmural-console: zmural stopped answering ({s}); try again", .{words.of(err)});
         c.close(init.gpa);
         std.process.exit(1);
     };
@@ -245,13 +252,13 @@ fn runLinux(init: std.process.Init, out: *std.Io.Writer, request: Request) !void
         },
         else => {
             // Turned away for 3 s (zmural serving many commands at once), or gone.
-            std.log.err("zmural-console: zmural didn't take the command ({s}); try again", .{@errorName(err)});
+            std.log.err("zmural-console: zmural didn't take the command ({s}); try again", .{words.of(err)});
             std.process.exit(1);
         },
     };
     defer c.close(init.gpa);
     const reply = c.request(req) catch |err| {
-        std.log.err("zmural-console: zmural stopped answering ({s}); try again", .{@errorName(err)});
+        std.log.err("zmural-console: zmural stopped answering ({s}); try again", .{words.of(err)});
         c.close(init.gpa);
         std.process.exit(1);
     };
@@ -383,7 +390,7 @@ fn uninstall(init: std.process.Init, out: *std.Io.Writer, args: []const []const 
     const arena = init.arena.allocator();
     const exe = try std.fs.path.join(arena, &.{ try std.process.executableDirPathAlloc(init.io, arena), if (builtin.os.tag == .windows) "zmural.exe" else "zmural" });
     var child = std.process.spawn(init.io, .{ .argv = &.{ exe, "--uninstall" } }) catch |err| {
-        std.log.err("zmural-console: can't run {s}: {s}", .{ exe, @errorName(err) });
+        std.log.err("zmural-console: can't run {s}: {s}", .{ exe, words.of(err) });
         std.process.exit(1);
     };
     const term = try child.wait(init.io);
@@ -405,13 +412,13 @@ fn autostart(init: std.process.Init, out: *std.Io.Writer, args: []const []const 
     if (eql(what, "on")) {
         const exe = try zmural.os.process.siblingExe(init.arena.allocator(), "zmural.exe");
         reg.enable(exe) catch |err| {
-            std.log.err("zmural-console: could not register autostart: {s}", .{@errorName(err)});
+            std.log.err("zmural-console: could not register autostart: {s}", .{words.of(err)});
             std.process.exit(1);
         };
         try out.print("zmural will start when you log in ({s})\n", .{exe});
     } else if (eql(what, "off")) {
         reg.disable() catch |err| {
-            std.log.err("zmural-console: could not remove autostart: {s}", .{@errorName(err)});
+            std.log.err("zmural-console: could not remove autostart: {s}", .{words.of(err)});
             std.process.exit(1);
         };
         try out.writeAll("zmural will no longer start when you log in\n");
@@ -440,7 +447,7 @@ fn autostartLinux(init: std.process.Init, out: *std.Io.Writer, args: []const []c
     if (eql(what, "on") or eql(what, "off")) {
         const on = eql(what, "on");
         al.write(init.io, entry, exe, on) catch |err| {
-            std.log.err("zmural-console: could not write {s}: {s}", .{ entry, @errorName(err) });
+            std.log.err("zmural-console: could not write {s}: {s}", .{ entry, words.of(err) });
             std.process.exit(1);
         };
         if (on) {
@@ -578,4 +585,8 @@ test "rotation commands" {
     try std.testing.expectEqual(@as(?control.Order, .shuffle), (try parse(&.{ "shuffle", "on" })).set_rotation.order);
     try std.testing.expectEqual(@as(?control.Order, .sequential), (try parse(&.{ "shuffle", "off" })).set_rotation.order);
     try std.testing.expectError(error.UnexpectedArgument, parse(&.{ "shuffle", "on", "now" }));
+}
+
+test {
+    _ = @import("words.zig");
 }
