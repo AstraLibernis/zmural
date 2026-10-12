@@ -60,7 +60,9 @@ Stability and the loose ends of what exists, before anything new.
 - [ ] A week of daily use on both OSes (sleep and resume, monitor hotplug), with a soak test for the parts a rig can run
 - [ ] Two real monitors on Windows, once someone has them
 
-## 0.3: Monitors
+## 0.3: Monitors, and dropping files in
+
+- [ ] **Drag and drop into the library folders.** The folder lists that show where wallpapers are kept (Welcome's "Where to put them", General's library folders) take files dropped on them: a file dropped on a folder's row is copied into that folder, so the user sorts as they add. A `.zip` dropped anywhere imports as Open file does. Dropped anywhere else in the window, a file goes to the first folder. Both OSes (Wayland `wl_data_device`; Windows `IDropTarget`), with a real-input test on Linux.
 
 - [ ] A view of what each monitor shows, in the window (today only `zmural-console status` says)
 - [ ] Properties per monitor (a monitor's own wallpaper has none, and one wallpaper on two monitors shares one set)

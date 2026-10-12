@@ -140,7 +140,7 @@ This is the goal, not what works today; [MILESTONES.md](MILESTONES.md) has the c
 - Audio-reactive wallpapers (a 128-bin spectrum), plus now-playing and system stats (CPU/GPU/RAM/network) exposed to web wallpapers.
 
 **Library**
-- Drag-and-drop a file or folder, or import a wallpaper package (`.zip`).
+- Drag and drop files onto a library folder in the settings window to copy them there, or import a wallpaper package (`.zip`).
 - Auto-detects `Videos/Wallpapers` and `Pictures/Wallpapers`.
 - **Imports Lively wallpaper packages** (reads their `LivelyInfo.json` metadata format).
 
