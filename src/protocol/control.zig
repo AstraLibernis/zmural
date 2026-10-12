@@ -154,6 +154,12 @@ pub const Status = struct {
     /// this run (its own last run's, or a renderer's); "" when none. A
     /// notice can go unseen (Do Not Disturb), so the window shows it too.
     crash: []const u8 = "",
+    /// The last main wallpaper that reached the screen; "" before any did.
+    shown: []const u8 = "",
+    /// The last wallpaper that couldn't be played or shown in this run, and
+    /// why; "" when none. `zmural-console apply` waits for one of the two.
+    broken: []const u8 = "",
+    broken_why: []const u8 = "",
 };
 pub const SettingsInfo = struct {
     fill: FillMode,

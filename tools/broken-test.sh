@@ -48,15 +48,27 @@ up() { setsid "$BIN/zmural" "$@" >>"$W/daemon.log" 2>&1 </dev/null & ZD=$!; slee
 # 1. Something played, then a broken file: back to what played.
 up --apply "$P/red.png"
 check "red plays first" "main | grep -q red.png && [ \"\$(shows 1)\" = red ]"
-z apply "$W/fake.mp4"; sleep 3
+z apply "$W/fake.mp4" 2>"$W/apply.err"; rc=$?; sleep 3
+check "a broken file: zmural-console apply fails, saying why (rc=$rc: $(head -c 120 "$W/apply.err"))" "[ $rc = 1 ] && grep -q \"can't show it: cannot play\" $W/apply.err"
 check "a broken file: back to the last wallpaper that played" "main | grep -q red.png && [ \"\$(shows 1)\" = red ]"
 check "…and the user is told what happened" "[ \$(told fake.mp4) = 1 ] && grep \"can't show fake.mp4\" $W/notify.log | grep -q 'Showing red.png again'"
 check "…and the broken file isn't saved" "grep -q '^wallpaper = .*red.png' $F && ! grep -q fake.mp4 $F"
 
+T0=$(date +%s%N); z apply "$P/green.png"; rc=$?; MS=$((($(date +%s%N) - T0) / 1000000))
+check "a good file: apply exits 0 once it shows (rc=$rc, ${MS} ms)" "[ $rc = 0 ] && [ $MS -lt 3000 ] && [ \"\$(shows 1)\" = green ]"
+z pause; T0=$(date +%s%N); z apply "$P/red.png"; rc=$?; MS=$((($(date +%s%N) - T0) / 1000000)); z play
+check "…paused too (rc=$rc, ${MS} ms)" "[ $rc = 0 ] && [ $MS -lt 3000 ]"
+z apply "$W/fake.mp4" 2>/dev/null; z apply "$W/fake.mp4" 2>/dev/null; rc=$?; sleep 2
+check "the same broken file again: fails again, after trying again (rc=$rc)" "[ $rc = 1 ] && [ \$(grep -c 'cannot play' $W/daemon.log) -ge 2 ]"
+printf 'broken for now' >"$W/fixed.mp4"; z apply "$W/fixed.mp4" 2>/dev/null; rc1=$?; sleep 2
+cp "$P/green.png" "$W/fixed.mp4"; z apply "$W/fixed.mp4"; rc2=$?
+check "a file fixed after it failed: applied again, it shows (rc $rc1 then $rc2)" "[ $rc1 = 1 ] && [ $rc2 = 0 ]"
+z apply "$P/red.png"
+
 # 2. A monitor's own wallpaper is broken: it follows the main one again.
-z apply "$W/fake.mp4" --monitor 2; sleep 3
+T1=$(told fake.mp4); z apply "$W/fake.mp4" --monitor 2; sleep 3
 check "a monitor's own broken wallpaper: it follows the main one again" "[ \"\$(shows 2)\" = red ] && ! grep -q fake.mp4 $F && z status | grep HEADLESS-2 | grep -q 'main wallpaper'"
-check "…and says so" "[ \$(told fake.mp4) = 2 ] && grep \"can't show fake.mp4\" $W/notify.log | tail -1 | grep -q 'That monitor shows the main wallpaper again'"
+check "…and says so" "[ \$(told fake.mp4) = $((T1 + 1)) ] && grep \"can't show fake.mp4\" $W/notify.log | tail -1 | grep -q 'That monitor shows the main wallpaper again'"
 z quit; sleep 1
 
 # 3. Nothing has played yet in this run (started straight on the broken

@@ -204,7 +204,7 @@ pub fn main(init: std.process.Init) !void {
     };
     defer c.close(init.gpa);
 
-    if (!try report(arena, out, try c.request(req))) {
+    if (!try report(arena, out, try c.request(req)) or !waitShown(c, req)) {
         // Closed by hand: exit skips the deferred close.
         c.close(init.gpa);
         std.process.exit(1);
@@ -240,7 +240,7 @@ fn runLinux(init: std.process.Init, out: *std.Io.Writer, request: Request) !void
         else => return err,
     };
     defer c.close(init.gpa);
-    if (!try report(arena, out, try c.request(req))) {
+    if (!try report(arena, out, try c.request(req)) or !waitShown(c, req)) {
         // Closed by hand: exit skips the deferred close.
         c.close(init.gpa);
         std.process.exit(1);
@@ -251,6 +251,42 @@ fn runLinux(init: std.process.Init, out: *std.Io.Writer, request: Request) !void
         .monitors => |m| printMonitors(out, m.list) catch {}, // zsnag:ok — a closed pipe is not an error here
         else => {},
     };
+}
+
+/// After an accepted `apply` of the main wallpaper: waits until zmural shows
+/// it, or says it can't (the renderer finds out only once it tries), so the
+/// exit status tells a script what happened. False when it can't be shown.
+/// Gives up waiting after a while (a slow first frame, no monitor to show it
+/// on) and counts that as shown: nothing said it failed.
+fn waitShown(c: anytype, req: Request) bool {
+    if (req != .apply or req.apply.monitor.len > 0 or req.apply.path.len == 0) return true;
+    const path = req.apply.path;
+    for (0..apply_wait_ms / apply_poll_ms) |_| {
+        const s = switch (c.request(.status) catch return true) {
+            .status => |s| s,
+            else => return true,
+        };
+        if (s.monitors == 0 or eql(s.shown, path)) return true;
+        if (eql(s.broken, path)) {
+            std.log.err("zmural-console: zmural can't show it: {s}", .{s.broken_why});
+            return false;
+        }
+        sleepMs(apply_poll_ms);
+    }
+    return true;
+}
+
+const apply_wait_ms = 6000;
+const apply_poll_ms = 100;
+
+fn sleepMs(ms: u64) void {
+    switch (builtin.os.tag) {
+        .windows => zmural.os.win32.Sleep(@intCast(ms)),
+        else => {
+            const ts: std.os.linux.timespec = .{ .sec = 0, .nsec = @intCast(ms * std.time.ns_per_ms) };
+            _ = std.os.linux.nanosleep(&ts, null);
+        },
+    }
 }
 
 /// One line per monitor: its number, name, size, ID, and what it shows.

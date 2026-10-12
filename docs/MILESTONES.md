@@ -38,7 +38,7 @@ and the controls inventory ([CONTROLS.md](CONTROLS.md)), which found controls no
 - [ ] **Every settings-window control pressed with real input, its effect checked, toasts included:** every row of [CONTROLS.md](CONTROLS.md) gets an `R:` on Linux
 - [ ] **A Windows pass:** the same list, by hand, on a real Windows 11 desktop, recorded in `notes/` (the window hasn't been looked at on Windows since it moved into zmural)
 - [ ] Small bugs from the blind test:
-  - [ ] `zmural-console apply` of a file that can't play exits 0; it should fail like the notification says
+  - [x] `zmural-console apply` waits until the wallpaper shows (about 0.2 s) or zmural says it can't, and then exits 1 with the renderer's reason; a file fixed after failing gets a fresh try. `status` carries what last played and what last failed. `tools/broken-test.sh` (each part mutation-checked); Windows compiled
   - [ ] `zmural-console export <name>` takes only a path; take a library name too
   - [ ] the VP9 "you won't be told again" notice came twice
   - [ ] the mini-player says "Playing" while `status` says paused (covered)

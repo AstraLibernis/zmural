@@ -20,10 +20,13 @@ pub const Fallback = struct {
     /// What its renderer said about it, cut to fit.
     message_buf: [300]u8 = undefined,
     message_len: usize = 0,
+    /// The last wallpaper that failed, kept after `take` for `status` (owned).
+    last_broken: ?[]u8 = null,
 
     pub fn deinit(f: *Fallback, gpa: std.mem.Allocator) void {
         if (f.last_good) |p| gpa.free(p);
         if (f.failed_path) |p| gpa.free(p);
+        if (f.last_broken) |p| gpa.free(p);
         f.* = .{};
     }
 
@@ -42,11 +45,24 @@ pub const Fallback = struct {
         f.failed_path = gpa.dupe(u8, path) catch null;
         f.message_len = @min(said.len, f.message_buf.len);
         @memcpy(f.message_buf[0..f.message_len], said[0..f.message_len]);
+        if (gpa.dupe(u8, path)) |copy| {
+            if (f.last_broken) |p| gpa.free(p);
+            f.last_broken = copy;
+        } else |_| {}
         // It can't be the one to go back to.
         if (f.last_good) |p| if (std.mem.eql(u8, p, path)) {
             gpa.free(p);
             f.last_good = null;
         };
+    }
+
+    /// `path` is being tried again (applied anew): an old failure of it no
+    /// longer stands, so `status` doesn't report it before the new try ends.
+    pub fn retrying(f: *Fallback, gpa: std.mem.Allocator, path: []const u8) void {
+        const p = f.last_broken orelse return;
+        if (!std.mem.eql(u8, p, path)) return;
+        gpa.free(p);
+        f.last_broken = null;
     }
 
     /// What the renderer said about the last failure.

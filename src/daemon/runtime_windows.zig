@@ -726,6 +726,7 @@ fn setWallpaper(path: []const u8) error{ OutOfMemory, BadPackage }!void {
     var pkg: ?Package = if (isPackage(path)) try loadPackage(path) else builtinProperties(path);
     errdefer if (pkg) |*k| k.deinit();
     const owned = try rt.gpa.dupe(u8, path);
+    rt.fallback.retrying(rt.gpa, path);
     if (rt.wallpaper) |old| rt.gpa.free(old);
     rt.wallpaper = owned;
     if (rt.package) |*old| old.deinit();
@@ -765,6 +766,9 @@ fn handleRequest(req: control.Request) control.Event {
                     .paused_by = h.paused_by,
                     .muted_by = h.muted_by,
                     .crash = rt.crash_buf[0..rt.crash_len],
+                    .shown = rt.fallback.last_good orelse "",
+                    .broken = rt.fallback.last_broken orelse "",
+                    .broken_why = if (rt.fallback.last_broken != null) rt.fallback.message() else "",
                     .paused = rt.settings.paused,
                     .muted = rt.settings.muted,
                     .monitors = @intCast(rt.screens.len), // zsnag:ok — at most monitors.max

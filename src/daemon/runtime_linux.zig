@@ -1112,6 +1112,9 @@ fn handleRequest(req: control.Request) control.Event {
                 .paused_by = h.paused_by,
                 .muted_by = h.muted_by,
                 .crash = rt.crash_buf[0..rt.crash_len],
+                .shown = rt.fallback.last_good orelse "",
+                .broken = rt.fallback.last_broken orelse "",
+                .broken_why = if (rt.fallback.last_broken != null) rt.fallback.message() else "",
                 .paused = rt.settings.paused,
                 .muted = rt.settings.muted,
                 .monitors = connected,
@@ -1468,6 +1471,7 @@ fn followsMain(d: *const Display) bool {
 fn setWallpaper(path: []const u8) error{ NoSuchFile, OutOfMemory }!void {
     try checkPath(path);
     const copy = try rt.gpa.dupe(u8, path);
+    rt.fallback.retrying(rt.gpa, path);
     for (rt.displays.items) |d| if (followsMain(d)) unroute(d);
     if (rt.current) |old| rt.gpa.free(old);
     rt.current = copy;
