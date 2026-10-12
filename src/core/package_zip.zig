@@ -30,6 +30,7 @@ const lively = @import("lively.zig");
 /// Sized from what live wallpapers are, plus room to spare: a long 4K video
 /// loop is a GiB or two, and a web wallpaper is a few thousand files at most.
 pub const Limits = struct {
+    /// Files and folders, each.
     max_files: u32 = 10_000,
     /// What the files may add up to, unpacked. Also the most `export` can
     /// write (a zip without zip64 stops at 4 GiB).
@@ -113,7 +114,7 @@ pub fn describe(err: Error) []const u8 {
         error.NameEncoding => "a file name in it isn't UTF-8 (an older zip tool made it); zip the files again with a newer one",
         error.SameName => "two files in it would get the same name here (they differ only in upper and lower case)",
         error.Link => "it holds a link, and links aren't unpacked",
-        error.TooManyFiles => "it holds too many files",
+        error.TooManyFiles => "it holds too many files and folders",
         error.TooLarge => "its files add up to too much",
         error.Overlap => "its files overlap inside it, a trick that makes a small zip unpack into a huge one",
         error.Inflated => "it would unpack to many times its own size, as a zip bomb does",
@@ -144,6 +145,8 @@ pub fn check(arena: std.mem.Allocator, fr: *Io.File.Reader, limits: Limits, diag
     var bytes: u64 = 0;
     var packed_bytes: u64 = 0;
     var files: u32 = 0;
+    // Folders count too: 300,000 empty ones are no wallpaper either.
+    var entries: u32 = 0;
     // Where each entry lies in the zip, to refuse entries that share data.
     var spans: std.ArrayList(Span) = .empty;
     while (true) {
@@ -163,9 +166,10 @@ pub fn check(arena: std.mem.Allocator, fr: *Io.File.Reader, limits: Limits, diag
             .store, .deflate => {},
             else => return error.UnsupportedCompression,
         }
+        entries += 1;
+        if (entries > limits.max_files) return error.TooManyFiles;
         if (!isDir(info.name)) {
             files += 1;
-            if (files > limits.max_files) return error.TooManyFiles;
             bytes = std.math.add(u64, bytes, entry.uncompressed_size) catch return error.TooLarge;
             if (bytes > limits.max_bytes) return error.TooLarge;
             packed_bytes +|= entry.compressed_size;
@@ -758,6 +762,7 @@ test "refused before anything is written: escapes, links, size, and the wrong co
         .{ error.NameEncoding, &.{.{ .name = "caf\x82.mp4", .data = "x" }}, .{} }, // CP437 é
         .{ error.Link, &.{ .{ .name = "rain.mp4", .data = "x" }, .{ .name = "home", .data = "/home", .mode = 0o120777 } }, .{} },
         .{ error.TooManyFiles, &.{ .{ .name = "a.mp4", .data = "x" }, .{ .name = "b.mp4", .data = "x" } }, .{ .max_files = 1 } },
+        .{ error.TooManyFiles, &.{ .{ .name = "a/", .data = "" }, .{ .name = "b/", .data = "" }, .{ .name = "c.mp4", .data = "x" } }, .{ .max_files = 2 } }, // folders count
         .{ error.TooLarge, &.{.{ .name = "a.mp4", .data = "0123456789" }}, .{ .max_bytes = 9 } },
         .{ error.LivelyProgram, &.{ .{ .name = "LivelyInfo.json", .data = "{\"Type\":0,\"FileName\":\"x.exe\"}" }, .{ .name = "x.exe", .data = "MZ" } }, .{} },
         .{ error.NothingPlayable, &.{.{ .name = "readme.txt", .data = "x" }}, .{} },
