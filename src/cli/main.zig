@@ -34,7 +34,7 @@ const usage =
     \\                                  library), a package or a folder of them
     \\                                  into a zip that imports anywhere
     \\  props                           list the wallpaper's properties
-    \\  prop <name> <value>             change one (e.g. prop speed 1.5)
+    \\  prop <name> <value>             change one (e.g. prop brightness -20; speed is for videos)
     \\  prop --reset                    put them all back to their defaults
     \\  quit                            stop zmural
     \\  autostart on|off|status         start zmural when you log in

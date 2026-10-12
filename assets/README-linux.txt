@@ -10,7 +10,8 @@ WHAT IT NEEDS
   nothing for it.
 
 QUICK START
-  1. Extract this folder anywhere you like, for example ~/.local/opt/zmural.
+  1. Extract the tarball anywhere you like, for example into ~/.local/opt
+     (it makes this folder there).
      Keep bin/ and share/ side by side.
   2. Install the libraries zmural uses from your system:
        Fedora:          sudo dnf install mpv-libs mesa-libEGL mesa-libgbm pango cairo
@@ -58,7 +59,15 @@ FROM A TERMINAL
   bin/zmural-console next | previous     step through the library
   bin/zmural-console pause | play        pause or resume
   bin/zmural-console mute | unmute
+  bin/zmural-console fill fit            how it fills the screen (or crop, stretch, center)
+  bin/zmural-console rotate 15 | off     change the wallpaper every 15 min
+  bin/zmural-console props               the wallpaper's adjustments
+  bin/zmural-console prop brightness -20 change one (prop --reset: all back)
+  bin/zmural-console import <file.zip>   unpack a zip of wallpapers
+  bin/zmural-console export <wallpaper>  pack one into a zip
+  bin/zmural-console rescan              pick up files you just added
   bin/zmural-console autostart on|off|status
+  bin/zmural-console help                everything it can do
   bin/zmural-console quit
 
 FILES

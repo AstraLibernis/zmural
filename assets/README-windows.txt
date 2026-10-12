@@ -6,8 +6,8 @@ WHAT IT NEEDS
   with Windows 11.
 
 QUICK START
-  1. Unzip this folder somewhere it can stay (for example
-     %LOCALAPPDATA%\Programs\zmural).
+  1. Unzip it somewhere it can stay (for example into
+     %LOCALAPPDATA%\Programs, which makes this folder there).
      Keep the wallpapers folder next to zmural.exe.
   2. Run zmural.exe. A star icon appears next to the clock, Prism (the
      wallpaper zmural comes with) shows, and the settings window opens on
@@ -42,7 +42,15 @@ FROM A TERMINAL
   zmural-console next | previous     step through the library
   zmural-console pause | play        pause or resume
   zmural-console mute | unmute
+  zmural-console fill fit            how it fills the screen (or crop, stretch, center)
+  zmural-console rotate 15 | off     change the wallpaper every 15 min
+  zmural-console props               the wallpaper's adjustments
+  zmural-console prop brightness -20 change one (prop --reset: all back)
+  zmural-console import <file.zip>   unpack a zip of wallpapers
+  zmural-console export <wallpaper>  pack one into a zip
+  zmural-console rescan              pick up files you just added
   zmural-console autostart on|off|status
+  zmural-console help                everything it can do
   zmural-console quit
 
 FILES

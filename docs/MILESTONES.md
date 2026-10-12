@@ -47,7 +47,7 @@ and the controls inventory ([CONTROLS.md](CONTROLS.md)), which found controls no
   - [x] the log noted the library every 3 s (Welcome's rescans); now only when its size changes, both OSes (seen on Sway: 5 rescans, 2 lines)
   - [x] ~~a CUDA line on machines without NVIDIA~~ left as is: it is FFmpeg trying NVIDIA's decoder (`hwdec=auto-safe`), harmless; silencing it means listing decoders by hand, which could cost NVIDIA users GPU decoding
   - [x] ~~empty folders left after uninstall~~ left as is: they are the desktop's shared folders (`~/.config/autostart`, `~/.local/share/applications`, the icon theme), which other apps use too
-- [ ] Doc fixes from the blind test: the Welcome page lists web pages on Linux; the README's install folder example nests; pickers need xdg-desktop-portal; `export` takes a path; `prop speed` is for videos; the tarball's `README.txt` lists fewer commands; waywallen-display's MIT text in `licenses/`
+- [x] Doc fixes from the blind test: the Welcome page no longer offers web pages on Linux, and says a right click on the tray icon works on most desktops (not Sway's bar); the install examples say the archive makes its own folder; Troubleshooting covers "no file picker available" (xdg-desktop-portal); `export` and `prop` say what they take in `help`; both packages' `README.txt` list the README's commands. waywallen-display's MIT text was already in `THIRD_PARTY_NOTICES.md`, which both packages ship
 
 ## 0.2: Solid on both OSes
 

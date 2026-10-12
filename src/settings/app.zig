@@ -964,8 +964,14 @@ fn pageWelcome(l: *Layout) void {
     const ui = &app.ui;
     const p = ui.pal;
     const lib = app.known.library;
-    paragraph(l, "zmural shows videos, pictures and offline web pages as your desktop wallpaper, behind your icons. " ++
-        "It keeps running in the background: click its tray icon to come back here, or right-click it to pause, mute or skip.", .body, p.text2);
+    // Web wallpapers are Windows-only so far, and on Sway's bar a right
+    // click opens this window too (it can't show an app's menu).
+    paragraph(l, if (builtin.os.tag == .windows)
+        "zmural shows videos, pictures and offline web pages as your desktop wallpaper, behind your icons. " ++
+            "It keeps running in the background: click its tray icon to come back here, or right-click it to pause, mute or skip."
+    else
+        "zmural shows videos, pictures and animated GIFs as your desktop wallpaper, behind your icons. " ++
+            "It keeps running in the background: click its tray icon to come back here; on most desktops a right click on it pauses, mutes or skips.", .body, p.text2);
     l.y += 20;
 
     groupHeader(l, "Pick a wallpaper");
@@ -1014,7 +1020,7 @@ fn pageWelcome(l: *Layout) void {
     const media = zmural.media;
     _ = cardRow(l, 68, .video, "Videos", comptime extNames(&media.video_exts), 0);
     _ = cardRow(l, 68, .image, "Pictures", comptime extNames(&media.image_exts), 0);
-    _ = cardRow(l, 68, .document, "Web pages", "An .html file or a package; always offline", 0);
+    if (builtin.os.tag == .windows) _ = cardRow(l, 68, .document, "Web pages", "An .html file or a package; always offline", 0);
     _ = cardRow(l, 68, .folder, "Packages in a .zip", "zmural's and Lively Wallpaper's", 0);
     l.y += 20;
 
