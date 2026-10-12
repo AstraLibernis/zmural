@@ -519,7 +519,8 @@ fn setUpAutostart() void {
         .on => {
             var buf: [4096]u8 = undefined;
             const text = std.Io.Dir.cwd().readFile(rt.io, entry_path, &buf) catch return;
-            if (autostart.execPath(text)) |old| if (std.mem.eql(u8, old, exe)) return;
+            var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+            if (autostart.execPath(&path_buf, text)) |old| if (std.mem.eql(u8, old, exe)) return;
             autostart.write(rt.io, entry_path, exe, true) catch |err| return log.warn("autostart entry not updated: {s}", .{@errorName(err)});
             log.info("start at login now runs {s}", .{exe});
         },

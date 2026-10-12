@@ -325,7 +325,7 @@ fn installLauncher(gpa: std.mem.Allocator, io: std.Io, env: Env) !void {
     defer gpa.free(data);
     const exe = try std.fs.path.join(gpa, &.{ env.exe_dir, "zmural" });
     defer gpa.free(exe);
-    var buf: [1024]u8 = undefined;
+    var buf: [3 * std.Io.Dir.max_path_bytes + 512]u8 = undefined;
     var changed = try writeIfChanged(gpa, io, data, "applications/org.zmural.Settings.desktop", try launcherEntry(&buf, exe));
     inline for (icon_sizes) |px| {
         const sub = std.fmt.comptimePrint("icons/hicolor/{d}x{d}/apps/org.zmural.Settings.png", .{ px, px });
@@ -336,20 +336,21 @@ fn installLauncher(gpa: std.mem.Allocator, io: std.Io, env: Env) !void {
 }
 
 fn launcherEntry(buf: []u8, exe: []const u8) error{NoSpaceLeft}![]u8 {
+    var q: [3 * std.Io.Dir.max_path_bytes]u8 = undefined;
     return std.fmt.bufPrint(buf,
         \\[Desktop Entry]
         \\Type=Application
         \\Name=zmural
         \\GenericName=Live wallpaper
         \\Comment=Choose and control your live wallpaper
-        \\Exec="{s}" --settings
+        \\Exec={s} --settings
         \\Icon=org.zmural.Settings
         \\Terminal=false
         \\Categories=Settings;DesktopSettings;
         \\Keywords=wallpaper;background;video;live;
         \\StartupWMClass=org.zmural.Settings
         \\
-    , .{exe});
+    , .{try zmural.os.autostart_linux.execQuoted(&q, exe)});
 }
 
 /// Writes `data/sub` unless it already holds exactly `bytes`. True when it wrote.
@@ -364,6 +365,12 @@ fn writeIfChanged(gpa: std.mem.Allocator, io: std.Io, data: []const u8, sub: []c
     if (std.fs.path.dirname(path)) |dir| try cwd.createDirPath(io, dir);
     try cwd.writeFile(io, .{ .sub_path = path, .data = bytes });
     return true;
+}
+
+test "the launcher entry quotes a folder with characters desktop entries reserve" {
+    var buf: [1024]u8 = undefined;
+    const e = try launcherEntry(&buf, "/opt/my $zmural 100%/bin/zmural");
+    try std.testing.expect(std.mem.find(u8, e, "Exec=env \"/opt/my \\\\$zmural 100%%/bin/zmural\" --settings\n") != null);
 }
 
 test "the launcher entry runs the settings window and names its icon" {

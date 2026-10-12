@@ -482,6 +482,7 @@ test {
         _ = @import("instance_linux.zig");
         _ = @import("tray_linux.zig");
         _ = @import("requirements_linux.zig");
+        _ = @import("desktop_linux.zig");
     }
     if (builtin.os.tag == .windows) {
         _ = @import("runtime_windows.zig");
