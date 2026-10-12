@@ -219,7 +219,8 @@ zmural takes the proven ideas from both and drops the weight. The zmural column 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how zmural is put together, its design principles, and the full feature plan.
 - [docs/WALLPAPER-FORMAT.md](docs/WALLPAPER-FORMAT.md): making wallpaper packages (`zmural.toml`, properties, the JS API).
 - [docs/MILESTONES.md](docs/MILESTONES.md): the build plan and what's done on each OS.
-- [docs/RELEASING.md](docs/RELEASING.md): working builds versus released builds, and reading crash reports.
+- [docs/RELEASING.md](docs/RELEASING.md): working builds versus released builds, publishing a release, and reading crash reports.
+- [docs/CONTROLS.md](docs/CONTROLS.md): every button, menu item and command, and what tests it.
 
 ## Acknowledgements
 

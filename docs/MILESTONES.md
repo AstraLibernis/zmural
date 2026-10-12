@@ -72,6 +72,13 @@ The order open items are taken in, from the comparison with Lively and waywallen
 (`notes/parity-2026-09-30.md`): the gaps a user notices first come first. Each stays listed under
 its milestone below; this is only the queue. Tick a line here when its milestone item is ticked.
 
+0. [ ] **Every control works, and a test presses it (2026-10-12, first).** A blind test of v0.1.0 (`notes/blind-test-2026-10-12.md`) found controls no test had ever pressed; `docs/CONTROLS.md` lists every one and what tests it.
+   - [ ] Tray menu on hosts that call `ContextMenu` (swaybar): show the menu there; a Sway rig with swaybar and a session bus that right-clicks the real tray icon
+   - [ ] Open folder / Open log / Show in folder: tell the user when nothing opened it (Linux: `xdg-open`'s exit status; Windows: `ShellExecuteW`'s result)
+   - [ ] Uninstall from the window: no lone "Yes", show that it's working, no ~4 s stall
+   - [ ] A rig that presses every settings-window control with real input and checks its effect, toasts included (`R:` for every row of `docs/CONTROLS.md` on Linux); a recorded pass of the same list on Windows
+   - [ ] The blind test's small bugs (3-10) and doc fixes
+   - [x] Zip bombs refused by ratio, and a zip capped at 4 GiB (fd39888)
 1. [ ] Monitors (M8)
    - [x] A different wallpaper per monitor: command line, file, and the settings window's right-click menu (2026-09-30)
    - [x] Fill mode per monitor: command line and file (2026-09-30)
