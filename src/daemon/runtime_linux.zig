@@ -1466,6 +1466,8 @@ fn checkPath(path: []const u8) error{ NoSuchFile, WebOnly }!void {
     // A relative path would be read from zmural's own working folder.
     if (!std.fs.path.isAbsolutePosix(path)) return error.NoSuchFile;
     std.Io.Dir.cwd().access(rt.io, path, .{}) catch return error.NoSuchFile;
+    // A pipe or a device would leave the player waiting forever.
+    if (!regular(path)) return error.NoSuchFile;
     if (Kind.forPath(path) == .web) return error.WebOnly;
     // A package must load, so a broken one is refused before anything changes.
     if (adjust.isPackage(path)) {
@@ -1478,10 +1480,18 @@ fn checkPath(path: []const u8) error{ NoSuchFile, WebOnly }!void {
 /// Web wallpapers have no renderer on Linux yet (`--renderer web` is a stub).
 const web_only = "web wallpapers are Windows-only so far; on Linux zmural shows videos, pictures and GIFs";
 
+/// A file (or a package's folder), not a pipe, a device or a socket.
+fn regular(path: []const u8) bool {
+    const st = std.Io.Dir.cwd().statFile(rt.io, path, .{}) catch return false;
+    return st.kind == .file or st.kind == .directory;
+}
+
 /// What to tell the user when `checkPath` refused `path`.
 fn whyNoFile(path: []const u8) []const u8 {
     if (kind_mod.isUrl(path)) return kind_mod.no_web_addresses;
     if (!std.fs.path.isAbsolutePosix(path)) return "a wallpaper is given by its full path";
+    if ((std.Io.Dir.cwd().access(rt.io, path, .{}) catch null) != null and !regular(path))
+        return "that isn't a file (a pipe or a device can't be a wallpaper)";
     if (adjust.isPackage(path) and (std.Io.Dir.cwd().access(rt.io, path, .{}) catch null) != null)
         return "not a usable wallpaper package (zmural's log says why)";
     return "no such file";

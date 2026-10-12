@@ -73,6 +73,9 @@ magick -size 10000x10000 xc:white -colors 2 "$W/canvas.gif"
 z apply "$W/canvas.gif" 2>"$W/apply.err"; rc=$?; sleep 1
 check "a GIF with a 10000x10000 canvas: refused as larger than a wallpaper can be (rc=$rc)" "[ $rc = 1 ] && grep -q '10000x10000 it is larger' $W/apply.err"
 check "…and mpv's retries stop with the renderer" "[ \$(grep -c 'No media data' $W/daemon.log) -le 12 ]"
+# A pipe named like a video would leave the player waiting forever.
+mkfifo "$W/pipe.mp4"; t0=$(date +%s%N); z apply "$W/pipe.mp4" 2>"$W/apply.err"; rc=$?; ms=$((($(date +%s%N) - t0) / 1000000))
+check "a pipe named .mp4: refused at once, saying why (rc=$rc, ${ms} ms)" "[ $rc = 1 ] && [ $ms -lt 1000 ] && grep -q \"isn't a file\" $W/apply.err"
 # A file's name can't write a line of its own into the log.
 FORGE="$W/x
 2026-10-12 14:30:00.000 error(daemon): FORGED.png"
