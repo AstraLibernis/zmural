@@ -1457,6 +1457,8 @@ fn sendProperties(r: *Renderer) void {
 fn checkPath(path: []const u8) error{ NoSuchFile, WebOnly }!void {
     if (std.mem.eql(u8, path, "test-pattern")) return;
     if (kind_mod.isUrl(path)) return error.NoSuchFile;
+    // A relative path would be read from zmural's own working folder.
+    if (!std.fs.path.isAbsolutePosix(path)) return error.NoSuchFile;
     std.Io.Dir.cwd().access(rt.io, path, .{}) catch return error.NoSuchFile;
     if (Kind.forPath(path) == .web) return error.WebOnly;
     // A package must load, so a broken one is refused before anything changes.
@@ -1473,6 +1475,7 @@ const web_only = "web wallpapers are Windows-only so far; on Linux zmural shows 
 /// What to tell the user when `checkPath` refused `path`.
 fn whyNoFile(path: []const u8) []const u8 {
     if (kind_mod.isUrl(path)) return kind_mod.no_web_addresses;
+    if (!std.fs.path.isAbsolutePosix(path)) return "a wallpaper is given by its full path";
     if (adjust.isPackage(path) and (std.Io.Dir.cwd().access(rt.io, path, .{}) catch null) != null)
         return "not a usable wallpaper package (zmural's log says why)";
     return "no such file";

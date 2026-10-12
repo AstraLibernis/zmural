@@ -1482,6 +1482,8 @@ fn playable(path: []const u8) Unplayable!void {
     if (web_renderer.isUrl(path)) return error.WebAddress;
     if (isDevicePath(path)) return error.BadPath;
     if (path.len >= 2 and isSlash(path[0]) and isSlash(path[1])) return;
+    // A relative path would be read from zmural's own working folder.
+    if (!std.fs.path.isAbsoluteWindows(path)) return error.BadPath;
     const path_w = std.unicode.wtf8ToWtf16LeAllocZ(rt.gpa, path) catch return error.BadPath;
     defer rt.gpa.free(path_w);
     const attrs = w.GetFileAttributesW(path_w);

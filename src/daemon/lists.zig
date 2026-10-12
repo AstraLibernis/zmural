@@ -113,7 +113,7 @@ pub fn joinFrom(buf: []u8, items: []const []const u8, offset: usize) Page {
 const testing = std.testing;
 
 test "parse trims, skips blanks and repeats, and checks every item" {
-    var l = try Owned.parse(testing.allocator, " eldenring.exe \n\n\r\nOBS64.exe\nobs64.EXE\n", isAppNameWindows);
+    var l = try Owned.parse(testing.allocator, " eldenring.exe \x00\x00\r\x00OBS64.exe\x00obs64.EXE\x00", isAppNameWindows);
     defer l.deinit(testing.allocator);
     try testing.expectEqual(@as(usize, 2), l.items.len);
     try testing.expectEqualStrings("eldenring.exe", l.items[0]);
@@ -130,7 +130,7 @@ test "parse trims, skips blanks and repeats, and checks every item" {
 test "parse limits count and length" {
     var many: std.ArrayList(u8) = .empty;
     defer many.deinit(testing.allocator);
-    for (0..max_items + 1) |i| try many.print(testing.allocator, "app{d}.exe\n", .{i});
+    for (0..max_items + 1) |i| try many.print(testing.allocator, "app{d}.exe\x00", .{i});
     try testing.expectError(error.TooMany, Owned.parse(testing.allocator, many.items, isAppNameWindows));
 
     const long = [_]u8{'a'} ** (max_item_len + 1);
@@ -156,10 +156,10 @@ test "joinFrom pages through a list without splitting items" {
     const items = [_][]const u8{ "aaa", "bb", "cccc", "d" };
     var buf: [8]u8 = undefined;
     const p1 = joinFrom(&buf, &items, 0);
-    try testing.expectEqualStrings("aaa\nbb", p1.text);
+    try testing.expectEqualStrings("aaa\x00bb", p1.text);
     try testing.expectEqual(@as(usize, 2), p1.count);
     const p2 = joinFrom(&buf, &items, 2);
-    try testing.expectEqualStrings("cccc\nd", p2.text);
+    try testing.expectEqualStrings("cccc\x00d", p2.text);
     try testing.expectEqual(@as(usize, 2), joinFrom(&buf, &items, 2).count);
     try testing.expectEqual(@as(usize, 0), joinFrom(&buf, &items, 9).count);
     // An item longer than the whole buffer yields an empty page; the caller must notice.

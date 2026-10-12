@@ -773,7 +773,10 @@ fn nameOf(id: u64) ?Name {
 pub fn writeDrawn(ui: *const Ui, w: *std.Io.Writer) !void {
     for (ui.drawn[0..ui.drawn_len]) |d| {
         const n = nameOf(d.id) orelse continue;
-        try w.print("{s}\t{d}\t{s}\t{d:.0}\t{d:.0}\t{d:.0}\t{d:.0}\t{d}\n", .{ n.name, n.index, d.label, d.r.x, d.r.y, d.r.w, d.r.h, @intFromBool(d.visible) });
+        try w.print("{s}\t{d}\t", .{ n.name, n.index });
+        // A label is a file's name, which may hold a tab or a newline.
+        for (d.label) |c| if (c < 0x20) try w.print("\\x{x:0>2}", .{c}) else try w.writeByte(c);
+        try w.print("\t{d:.0}\t{d:.0}\t{d:.0}\t{d:.0}\t{d}\n", .{ d.r.x, d.r.y, d.r.w, d.r.h, @intFromBool(d.visible) });
     }
 }
 

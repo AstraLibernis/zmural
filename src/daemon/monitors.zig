@@ -9,6 +9,7 @@
 //! Shared by both runtimes; nothing here touches an OS.
 
 const std = @import("std");
+const list_sep = @import("zmural").protocol.control.list_sep;
 const zmural = @import("zmural");
 const MonitorId = zmural.monitor.Id;
 const MonitorWallpaper = @import("settings.zig").MonitorWallpaper;
@@ -196,11 +197,11 @@ pub fn format(buf: []u8, known: []const Known, own: *const Own, fills: *const Fi
     for (known) |k| {
         const before = w.buffered().len;
         const fill = if (fills.get(k.id)) |f| @tagName(f) else "";
-        w.print("{s}\t{s}\t{d}x{d}\t{s}\t{s}\n", .{ &k.id, k.name, k.width, k.height, own.get(k.id) orelse "", fill }) catch {
-            return std.mem.trimEnd(u8, buf[0..before], "\n");
+        w.print("{s}\t{s}\t{d}x{d}\t{s}\t{s}{c}", .{ &k.id, k.name, k.width, k.height, own.get(k.id) orelse "", fill, list_sep }) catch {
+            return std.mem.trimEnd(u8, buf[0..before], &.{list_sep});
         };
     }
-    return std.mem.trimEnd(u8, w.buffered(), "\n");
+    return std.mem.trimEnd(u8, w.buffered(), &.{list_sep});
 }
 
 /// One line of `format`, taken apart (the protocol owns the layout).
@@ -290,7 +291,7 @@ test "a monitor is named by number, name or ID; the list round-trips" {
     try std.testing.expect(fills.set(known[1].id, .fit));
     var buf: [512]u8 = undefined;
     const text = format(&buf, &known, &own, &fills);
-    var lines = std.mem.splitScalar(u8, text, '\n');
+    var lines = std.mem.splitScalar(u8, text, list_sep);
     const first = parseLine(lines.next().?).?;
     try std.testing.expectEqualStrings("DP-1", first.name);
     try std.testing.expectEqualStrings("2560x1440", first.size);
@@ -304,7 +305,7 @@ test "a monitor is named by number, name or ID; the list round-trips" {
 
     // A buffer too small for the second monitor lists the first only.
     var small: [48]u8 = undefined;
-    try std.testing.expect(std.mem.findScalar(u8, format(&small, &known, &own, &fills), '\n') == null);
+    try std.testing.expect(std.mem.findScalar(u8, format(&small, &known, &own, &fills), list_sep) == null);
 }
 
 test "a monitor fills its own way, else the main way; the list survives settings.toml" {

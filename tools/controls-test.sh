@@ -96,7 +96,8 @@ check "the window is up and says where its controls are" "[ -n \"$OX\" ] && [ -s
 input() { "$BIN/zmural-test-input" 2304 768 "$@" wait:250 >/dev/null 2>&1; }
 # The control by name, index, and (if given) its label: "x y w h visible".
 # An index of * takes any (a tile found by its file's name).
-find() { awk -F'\t' -v n="$1" -v i="$2" -v l="${3:-}" '$1 == n && (i == "*" || $2 == i) && (l == "" || $3 == l) { print $4, $5, $6, $7, $8; exit }' "$C"; }
+# (The label goes through the environment: awk -v would turn its \x0a back into a newline.)
+find() { LABEL="${3:-}" awk -F'\t' -v n="$1" -v i="$2" 'BEGIN { l = ENVIRON["LABEL"] } $1 == n && (i == "*" || $2 == i) && (l == "" || $3 == l) { print $4, $5, $6, $7, $8; exit }' "$C"; }
 # Scrolls until the control is in sight, then prints its centre on screen.
 locate() {
   local line dir=3 tries=0
@@ -154,6 +155,14 @@ check "…and Mute" "st | grep -q '^muted *: yes'"
 
 # ---- Wallpapers page ---------------------------------------------------------------------
 page 1
+# A file name with a newline is one wallpaper, not two (the list's separator).
+cp "$P/blue.png" "$P/new
+line.png"; press rescan 0; sleep 2
+check "a file name with a newline: one tile, as many tiles as status counts" "[ \$(awk -F'\t' '\$1==\"tile\"' $C | wc -l) = \$(st | sed -n 's/^library *: \\([0-9]*\\).*/\\1/p') ] && [ -n \"\$(find tile '*' 'new\\x0aline.png')\" ]"
+press tile '*' 'new\x0aline.png'; sleep 1
+check "…and its tile shows that very file" "st | head -1 | grep -q '/new\$'"
+rm "$P/new
+line.png"; press rescan 0; sleep 1
 press tile '*' green.png; sleep 1
 check "a tile: shows that wallpaper" "st | head -1 | grep -q green.png"
 cp "$W/extra/yellow.png" "$P/"; press rescan 0; sleep 2

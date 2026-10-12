@@ -7,8 +7,8 @@
 //! that every request gets exactly one reply (`ok`, `failed`, `status`,
 //! `settings` or `library`). The daemon never sends anything unasked.
 //!
-//! Lists (folders, app names) travel as one string with the items separated
-//! by '\n', which no Windows path or file name can contain.
+//! Lists (folders, app names, the library, monitors) travel as one string
+//! with the items separated by `list_sep`.
 
 const FillMode = @import("../core/layout.zig").FillMode;
 const policy = @import("../core/policy.zig");
@@ -18,8 +18,10 @@ pub const version: u16 = 1;
 /// Space-separated capability list sent in `welcome`.
 pub const capabilities = "control.v1 apply playback mute rescan settings library properties rotation monitors";
 
-/// The separator inside list strings.
-pub const list_sep = '\n';
+/// The separator inside list strings: NUL, the one byte no path, file
+/// name or app name can hold (a newline can be in a file name, and split it
+/// in two).
+pub const list_sep = 0;
 
 /// One action per `policy.Condition`, indexed by its tag value.
 pub const RuleActions = [@typeInfo(policy.Condition).@"enum".fields.len]policy.Action;
