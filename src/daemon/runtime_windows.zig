@@ -205,6 +205,9 @@ const Runtime = struct {
     crash_told: bool = false,
     /// What to go back to when a wallpaper can't be played (`goBackFromBroken`).
     fallback: Fallback = .{},
+    /// The library's size as last logged: the settings window's Welcome page
+    /// rescans every few seconds, and the log says only what changed.
+    logged_count: ?usize = null,
     shut_down: bool = false,
     watcher: facts.Watcher = .{},
     facts_pending: bool = false,
@@ -1112,7 +1115,8 @@ fn onScanned(job: *ScanJob) void {
     if (job.gen != rt.scan_gen) return; // a newer scan is on its way
     std.mem.swap(Library, &rt.library, &job.library);
     rt.rotation.forget(rt.gpa);
-    std.log.info("library: {d} wallpapers in {d} folders", .{ rt.library.count(), job.dir_list.len });
+    if (rt.logged_count != rt.library.count()) std.log.info("library: {d} wallpapers in {d} folders", .{ rt.library.count(), job.dir_list.len });
+    rt.logged_count = rt.library.count();
 }
 
 /// The tray tooltip: what's showing, and whether it's paused or muted.

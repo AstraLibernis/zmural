@@ -44,7 +44,9 @@ and the controls inventory ([CONTROLS.md](CONTROLS.md)), which found controls no
   - [x] the player card said "Playing" while a pause rule held the wallpaper; it says which now ("Paused: windows cover it"), unit-tested for every rule, seen on Sway
   - [x] two imports of the same zip showed the same tile name; a name two wallpapers share now carries its folder ("sun.png · Sunsets (2)"), unit-tested, seen on Sway
   - [x] a bad value in `settings.toml` was only logged; the user is told once, with the line, and again only after it read fine in between (`tools/broken-test.sh`, mutation-checked); Windows: a tray balloon, compiled
-  - [ ] the log notes the library every 3 s; a CUDA line on machines without NVIDIA; empty folders left after uninstall
+  - [x] the log noted the library every 3 s (Welcome's rescans); now only when its size changes, both OSes (seen on Sway: 5 rescans, 2 lines)
+  - [x] ~~a CUDA line on machines without NVIDIA~~ left as is: it is FFmpeg trying NVIDIA's decoder (`hwdec=auto-safe`), harmless; silencing it means listing decoders by hand, which could cost NVIDIA users GPU decoding
+  - [x] ~~empty folders left after uninstall~~ left as is: they are the desktop's shared folders (`~/.config/autostart`, `~/.local/share/applications`, the icon theme), which other apps use too
 - [ ] Doc fixes from the blind test: the Welcome page lists web pages on Linux; the README's install folder example nests; pickers need xdg-desktop-portal; `export` takes a path; `prop speed` is for videos; the tarball's `README.txt` lists fewer commands; waywallen-display's MIT text in `licenses/`
 
 ## 0.2: Solid on both OSes

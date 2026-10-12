@@ -221,6 +221,9 @@ const Runtime = struct {
     crash_told: bool = false,
     /// What to go back to when a wallpaper can't be played (`goBackFromBroken`).
     fallback: Fallback = .{},
+    /// The library's size as last logged: the settings window's Welcome page
+    /// rescans every few seconds, and the log says only what changed.
+    logged_count: ?usize = null,
 };
 
 var rt: Runtime = undefined;
@@ -1382,7 +1385,8 @@ fn rescan() void {
     rt.library.scan(rt.io, dirs.items);
     if (rt.opts.starter_dir) |d| rt.library.scanLast(rt.io, d);
     rt.rotation.forget(rt.gpa);
-    log.info("library: {d} wallpapers", .{rt.library.count()});
+    if (rt.logged_count != rt.library.count()) log.info("library: {d} wallpapers", .{rt.library.count()});
+    rt.logged_count = rt.library.count();
 }
 
 /// The wallpaper after (or before) the current one, in the order the user chose.
