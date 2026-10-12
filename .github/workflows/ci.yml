@@ -8,6 +8,7 @@
 # milestone or a major push, not on every push:
 # - by hand: Actions > CI > Run workflow;
 # - a pushed tag: v* (a release) or milestone-* (a finished milestone);
+# A run by hand or on a v* tag keeps the tested Windows zip as a run artifact.
 # - a push to main whose last commit message contains [full ci].
 # Other pushes start it and every job is skipped, which costs nothing.
 # Linux is tested on real desktops by the maintainer, and on the headless rigs in
@@ -358,3 +359,16 @@ jobs:
           if ($problems.Count -gt 0) { $problems | ForEach-Object { Write-Host "PROBLEM: $_" }; throw "start with Windows did not behave" }
           Write-Host "start with Windows behaves"
           exit 0
+      # A run by hand or a release tag keeps the zip it just tested, with its
+      # debugging info, for the GitHub release (docs/RELEASING.md): the zip
+      # needs Windows' own tar.exe, so it can't be made on Linux.
+      - name: Keep the release zip
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: zmural-windows-release
+          path: |
+            zig-out/package/zmural-*-windows-x86_64.zip
+            zig-out/package/debug/
+          if-no-files-found: error
+          retention-days: 30

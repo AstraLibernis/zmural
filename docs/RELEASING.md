@@ -25,6 +25,8 @@ never on the working (Debug) build, which can be ten times slower.
 
 ```
 # Windows (on Windows): zmural-<version>-windows-x86_64.zip
+# CI makes the same zip, tests it, and keeps it with its debug folder as the run's
+# zmural-windows-release artifact (run by hand, or on a v* tag).
 # The -Dtarget builds for every x86-64 PC, not just this machine's CPU.
 zig build package -Doptimize=ReleaseSafe -Dtarget=x86_64-windows
 
