@@ -59,6 +59,7 @@ check "a good file: apply exits 0 once it shows (rc=$rc, ${MS} ms)" "[ $rc = 0 ]
 z pause; T0=$(date +%s%N); z apply "$P/red.png"; rc=$?; MS=$((($(date +%s%N) - T0) / 1000000)); z play
 check "…paused too (rc=$rc, ${MS} ms)" "[ $rc = 0 ] && [ $MS -lt 3000 ]"
 z apply "$W/fake.mp4" 2>/dev/null; z apply "$W/fake.mp4" 2>/dev/null; rc=$?; sleep 2
+check "…and the user isn't told again: one notification per broken file ($(told fake.mp4))" "[ \$(told fake.mp4) = 1 ]"
 check "the same broken file again: fails again, after trying again (rc=$rc)" "[ $rc = 1 ] && [ \$(grep -c 'cannot play' $W/daemon.log) -ge 2 ]"
 # Pictures mpv opens but can't decode a frame from: it never ends them, it
 # says "No media data to loop" and tries again, several times a second.
@@ -116,8 +117,14 @@ L=$(grep -n '^volume' "$F" | cut -d: -f1)
 check "a value it can't use in settings.toml: the user is told, with the line" "[ \$(bad) = 1 ] && grep \"zmural can't use settings.toml\" $W/notify.log | grep -q 'line $L has a value'"
 echo "# still bad" >>"$F"; sleep 3
 check "…once, not at every edit while it stays bad" "[ \$(bad) = 1 ] && grep -q 'volume = \"loud\"' $F"
+sed -i 's/^fill = .*/fill = "zoom"/' "$F"; sleep 3
+check "…but a different mistake while it's still bad is told too" "[ \$(bad) = 2 ]"
 cp "$W/good.toml" "$F"; sleep 3; sed -i 's/^volume = .*/volume = "loud"/' "$F"; sleep 3
-check "…and again once it read fine and broke again" "[ \$(bad) = 2 ]"
+check "…and again once it read fine and broke again" "[ \$(bad) = 3 ]"
+check "…saying zmural keeps its current settings" "grep \"zmural can't use settings.toml\" $W/notify.log | tail -1 | grep -q 'keeps its current settings'"
+# Bad already when zmural starts: it runs on its defaults, and says so.
+z quit; sleep 1; up
+check "a bad settings.toml at start: told zmural uses its defaults" "[ \$(bad) = 4 ] && grep \"zmural can't use settings.toml\" $W/notify.log | tail -1 | grep -q 'uses its defaults for now'"
 cp "$W/good.toml" "$F"; sleep 3
 z quit; sleep 1
 

@@ -600,7 +600,8 @@ fn goBackFromBroken() void {
     var title_buf: [300]u8 = undefined;
     const title = std.fmt.bufPrint(&title_buf, "zmural can't show {s}", .{zmural.media.displayName(broken)}) catch "zmural can't show this wallpaper";
     std.log.info("{s}: {s}", .{ title, text });
-    if (rt.tray) |*t| t.balloon(title, text);
+    // The same file again (applied twice, or by rotation): logged, not stacked.
+    if (rt.fallback.firstTime(rt.gpa, broken, main)) if (rt.tray) |*t| t.balloon(title, text);
 }
 
 /// Shows what to go back to instead of `broken` and returns it (valid until
@@ -1384,7 +1385,7 @@ fn checkFile() void {
     var buf: [600]u8 = undefined;
     if (store.unreadableNotice(&buf)) |n| if (rt.tray) |*t| if (t.shown) {
         t.balloon(n.title, n.body);
-        store.told = true;
+        store.markTold();
     };
     const stamp = stampOf(store.*) orelse return; // deleted: the next save recreates it
     if (rt.file_stamp) |old| if (std.meta.eql(old, stamp)) return;

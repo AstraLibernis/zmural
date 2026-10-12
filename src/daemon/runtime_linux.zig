@@ -423,7 +423,7 @@ fn checkFile() void {
     const store = rt.opts.store orelse return;
     var buf: [600]u8 = undefined;
     if (store.unreadableNotice(&buf)) |n| {
-        if (desktop.shown(if (rt.bus) |*b| b else null, n.title, n.body)) store.told = true;
+        if (desktop.shown(if (rt.bus) |*b| b else null, n.title, n.body)) store.markTold();
     }
     const stamp = stampOf(store) orelse return; // deleted: the next save recreates it
     if (rt.file_stamp) |old| if (std.meta.eql(old, stamp)) return;
@@ -1852,7 +1852,8 @@ fn goBackFromBroken() void {
     var title_buf: [300]u8 = undefined;
     const title = std.fmt.bufPrint(&title_buf, "zmural can't show {s}", .{zmural.media.displayName(broken)}) catch "zmural can't show this wallpaper";
     log.info("{s}: {s}", .{ title, text });
-    desktop.notify(if (rt.bus) |*b| b else null, title, text);
+    // The same file again (applied twice, or by rotation): logged, not stacked.
+    if (rt.fallback.firstTime(rt.gpa, broken, main)) desktop.notify(if (rt.bus) |*b| b else null, title, text);
 }
 
 /// Shows what to go back to instead of `broken` and returns it (valid until

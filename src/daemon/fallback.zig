@@ -22,11 +22,16 @@ pub const Fallback = struct {
     message_len: usize = 0,
     /// The last wallpaper that failed, kept after `take` for `status` (owned).
     last_broken: ?[]u8 = null,
+    /// The wallpapers the user was told about this run (owned): the same
+    /// one failing again is logged, not notified again.
+    told: std.ArrayList([]u8) = .empty,
 
     pub fn deinit(f: *Fallback, gpa: std.mem.Allocator) void {
         if (f.last_good) |p| gpa.free(p);
         if (f.failed_path) |p| gpa.free(p);
         if (f.last_broken) |p| gpa.free(p);
+        for (f.told.items) |p| gpa.free(p);
+        f.told.deinit(gpa);
         f.* = .{};
     }
 
@@ -64,6 +69,23 @@ pub const Fallback = struct {
         gpa.free(p);
         f.last_broken = null;
     }
+
+    /// True the first time `path` fails this run as the main wallpaper (or,
+    /// `main` false, as a monitor's own): tell the user then. The same again
+    /// is news to nobody.
+    pub fn firstTime(f: *Fallback, gpa: std.mem.Allocator, path: []const u8, main: bool) bool {
+        const where: u8 = if (main) 'm' else 'o';
+        for (f.told.items) |p| if (p[0] == where and std.mem.eql(u8, p[1..], path)) return false;
+        if (f.told.items.len >= max_told) return false; // a run of hundreds of broken files: enough said
+        const copy = std.mem.concat(gpa, u8, &.{ &.{where}, path }) catch return true;
+        f.told.append(gpa, copy) catch {
+            gpa.free(copy);
+            return true;
+        };
+        return true;
+    }
+
+    const max_told = 64;
 
     /// What the renderer said about the last failure.
     pub fn message(f: *const Fallback) []const u8 {
@@ -127,4 +149,15 @@ test "back to the last wallpaper that played, else zmural's own, never the broke
     // Asked directly about the one that played last: never itself.
     f.played(gpa, "/v/sea.mp4");
     try std.testing.expectEqualStrings(prism, f.instead("/v/sea.mp4", prism).?);
+}
+
+test "the user is told once per broken file in a run" {
+    const gpa = std.testing.allocator;
+    var f: Fallback = .{};
+    defer f.deinit(gpa);
+    try std.testing.expect(f.firstTime(gpa, "/w/a.mp4", true));
+    try std.testing.expect(!f.firstTime(gpa, "/w/a.mp4", true));
+    try std.testing.expect(f.firstTime(gpa, "/w/a.mp4", false)); // on one monitor: another thing to say
+    try std.testing.expect(!f.firstTime(gpa, "/w/a.mp4", false));
+    try std.testing.expect(f.firstTime(gpa, "/w/b.mp4", true));
 }

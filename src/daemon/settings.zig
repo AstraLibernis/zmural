@@ -292,9 +292,14 @@ pub const Store = struct {
     /// Why it didn't, for the user ("line 7 has a value zmural can't use").
     why_buf: [96]u8 = undefined,
     why_len: usize = 0,
-    /// The user was told it doesn't read (`tellUnreadable`); again only after
-    /// it has read fine in between.
-    told: bool = false,
+    /// What the user was last told about it (`unreadableNotice`), so a new
+    /// mistake is told too and the same one isn't; cleared once it reads.
+    told_buf: [96]u8 = undefined,
+    told_len: ?usize = null,
+    /// It didn't read when zmural started, so zmural runs on its defaults
+    /// (not on settings it had before).
+    bad_at_start: bool = false,
+    loads: u32 = 0,
     /// `load` found no file: zmural's first run (nothing was ever changed).
     fresh: bool = false,
 
@@ -315,6 +320,9 @@ pub const Store = struct {
     /// Defaults when the file doesn't exist yet or can't be parsed. A missing
     /// folder is made, so a hand-written settings.toml has somewhere to go.
     pub fn load(store: *Store, arena: std.mem.Allocator) Settings {
+        const at_start = store.loads == 0;
+        store.loads += 1;
+        store.bad_at_start = at_start;
         const text = std.Io.Dir.cwd().readFileAlloc(store.io, store.path, arena, .limited(1 << 20)) catch |err| {
             if (err == error.FileNotFound) {
                 store.fresh = true;
@@ -339,7 +347,8 @@ pub const Store = struct {
             }
             return .{};
         };
-        store.told = false;
+        store.told_len = null;
+        store.bad_at_start = false;
         return s;
     }
 
@@ -347,13 +356,22 @@ pub const Store = struct {
         store.why_len = if (std.fmt.bufPrint(&store.why_buf, fmt, args)) |w| w.len else |_| 0;
     }
 
-    /// What to tell the user once when the file doesn't read; null when it
-    /// reads, or they were told. `title`, `body` live in `buf`.
+    /// What to tell the user when the file doesn't read; null when it reads,
+    /// or they were told this very thing. `title`, `body` live in `buf`.
     pub fn unreadableNotice(store: *Store, buf: []u8) ?struct { title: []const u8, body: []const u8 } {
-        if (!store.read_only or store.told) return null;
+        if (!store.read_only) return null;
+        const why = store.why_buf[0..store.why_len];
+        if (store.told_len) |n| if (std.mem.eql(u8, store.told_buf[0..n], why)) return null;
         const title = "zmural can't use settings.toml";
-        const body = std.fmt.bufPrint(buf, "{s}: {s}. zmural keeps its current settings and won't change the file until it reads again.", .{ store.path, store.why_buf[0..store.why_len] }) catch return null;
+        const then = if (store.bad_at_start) "zmural uses its defaults for now" else "zmural keeps its current settings";
+        const body = std.fmt.bufPrint(buf, "{s}: {s}. {s} and won't change the file until it reads again.", .{ store.path, why, then }) catch return null;
         return .{ .title = title, .body = body };
+    }
+
+    /// The user was told `unreadableNotice`'s news.
+    pub fn markTold(store: *Store) void {
+        @memcpy(store.told_buf[0..store.why_len], store.why_buf[0..store.why_len]);
+        store.told_len = store.why_len;
     }
 
     /// Writes atomically (temp file, then rename).
