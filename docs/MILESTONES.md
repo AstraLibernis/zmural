@@ -57,7 +57,9 @@ Stability and the loose ends of what exists, before anything new.
 - [ ] KDE: when the plugin installed but Plasma couldn't be switched to it, nothing shows and no still picture is set
 - [ ] `status` shows a monitor's own fill mode but not the main one
 - [ ] With `$ZMURAL_CONFIG_DIR`'s parent missing, zmural runs without a log (test setups only)
-- [ ] A week of daily use on both OSes (sleep and resume, monitor hotplug), with a soak test for the parts a rig can run
+- [x] **A soak test (2026-10-12), Linux:** `tools/soak-test.sh` runs a day of use in rounds on headless Sway with two outputs, a session bus, swaybar's tray and mako: every wallpaper kind and a broken file, next/previous, fill modes, a monitor's own wallpaper, pause, mute, adjustments, the settings window opened and closed, `settings.toml` edited by hand, a zip imported, a monitor unplugged and replugged, a renderer killed every 5 rounds. It samples memory, open files, threads and processes after each round and judges the trend after warm-up; zmural must answer every round, accept every command, never crash, and quit cleanly with nothing left (a Debug build adds its allocator's leak report, proven to catch a planted leak). The verdict is checked on made-up samples (`--judge`).
+- [ ] The soak test on Windows (a runner can do the CLI part; the window needs a desktop)
+- [ ] A week of daily use on both OSes: sleep and resume (no rig can suspend), real monitor hotplug, a real GPU's driver resets
 - [ ] Two real monitors on Windows, once someone has them
 
 ## 0.3: Monitors, and dropping files in
