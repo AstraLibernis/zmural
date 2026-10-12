@@ -126,7 +126,7 @@ zmural-console quit
 
 On Linux, run these as `bin/zmural-console` from zmural's folder.
 
-**Wallpapers from a `.zip`:** pick the zip with **Open file** in the settings window, or run `zmural-console import`. zmural checks the zip first and refuses one that could write outside its folder, contains links, or is encrypted, damaged or suspiciously large; a failed import leaves nothing behind. Lively Wallpaper packages are converted to zmural's own format as they import. Lively wallpapers that run a program, show a web address or play a stream are refused. If you make wallpapers yourself, see [docs/WALLPAPER-FORMAT.md](docs/WALLPAPER-FORMAT.md).
+**Wallpapers from a `.zip`:** pick the zip with **Open file** in the settings window, or run `zmural-console import`. zmural checks the zip first and refuses one that could write outside its folder, contains links, or is encrypted or damaged, or is bigger than any wallpaper needs: more than 10,000 files, more than 4 GiB unpacked (a long 4K video is a GiB or two), or, past 256 MiB, more than 20 times the zip's own size, as a zip bomb unpacks; a failed import leaves nothing behind. Lively Wallpaper packages are converted to zmural's own format as they import. Lively wallpapers that run a program, show a web address or play a stream are refused. If you make wallpapers yourself, see [docs/WALLPAPER-FORMAT.md](docs/WALLPAPER-FORMAT.md).
 
 **Where zmural keeps things:**
 

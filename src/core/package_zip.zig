@@ -12,8 +12,9 @@
 //!   Windows or Linux: absolute, a drive (`C:`), `..`, a stream (`a:b`), a
 //!   reserved device name (`CON`), a trailing dot or space, control bytes;
 //! - an entry is a link, or encrypted, or compressed in a way we can't read;
-//! - there are too many files, or they add up to too much (a zip bomb can't
-//!   get past this: no entry is written beyond the size it declares);
+//! - there are too many files, or they add up to more than any live
+//!   wallpaper needs, or they unpack to many times the zip's own size, as a
+//!   zip bomb does (and no entry is written beyond the size it declares);
 //! - it holds nothing that can be a wallpaper.
 //! `unpack` then writes into a hidden folder beside the target, checks each
 //! file against its CRC, checks a package's manifest, and only then renames
@@ -26,9 +27,20 @@ const manifest = @import("manifest.zig");
 const media = @import("media.zig");
 const lively = @import("lively.zig");
 
+/// Sized from what live wallpapers are, plus room to spare: a long 4K video
+/// loop is a GiB or two, and a web wallpaper is a few thousand files at most.
 pub const Limits = struct {
     max_files: u32 = 10_000,
-    max_bytes: u64 = 8 << 30,
+    /// What the files may add up to, unpacked. Also the most `export` can
+    /// write (a zip without zip64 stops at 4 GiB).
+    max_bytes: u64 = 4 << 30,
+    /// Videos and pictures are compressed already and barely shrink in a zip;
+    /// a page's text shrinks a few times. A zip that unpacks to more than
+    /// this many times its packed size is a bomb...
+    max_ratio: u64 = 20,
+    /// ...unless it unpacks to no more than this (a few uncompressed pictures
+    /// or sounds can shrink a lot without being a danger).
+    ratio_floor: u64 = 256 << 20,
 };
 
 pub const Error = error{
@@ -42,6 +54,7 @@ pub const Error = error{
     TooManyFiles,
     TooLarge,
     Overlap,
+    Inflated,
     Empty,
     LivelyBadInfo,
     LivelyBadProperties,
@@ -103,6 +116,7 @@ pub fn describe(err: Error) []const u8 {
         error.TooManyFiles => "it holds too many files",
         error.TooLarge => "its files add up to too much",
         error.Overlap => "its files overlap inside it, a trick that makes a small zip unpack into a huge one",
+        error.Inflated => "it would unpack to many times its own size, as a zip bomb does",
         error.Empty => "it is empty",
         error.LivelyBadInfo => "its LivelyInfo.json can't be read",
         error.LivelyBadProperties => "its LivelyProperties.json can't be read",
@@ -128,6 +142,7 @@ pub fn check(arena: std.mem.Allocator, fr: *Io.File.Reader, limits: Limits, diag
     var names: std.ArrayList([]const u8) = .empty;
     var seen: std.StringHashMapUnmanaged(void) = .empty;
     var bytes: u64 = 0;
+    var packed_bytes: u64 = 0;
     var files: u32 = 0;
     // Where each entry lies in the zip, to refuse entries that share data.
     var spans: std.ArrayList(Span) = .empty;
@@ -153,6 +168,7 @@ pub fn check(arena: std.mem.Allocator, fr: *Io.File.Reader, limits: Limits, diag
             if (files > limits.max_files) return error.TooManyFiles;
             bytes = std.math.add(u64, bytes, entry.uncompressed_size) catch return error.TooLarge;
             if (bytes > limits.max_bytes) return error.TooLarge;
+            packed_bytes +|= entry.compressed_size;
         } else if (entry.uncompressed_size != 0) return error.BadName;
         // Two names that differ only in case are one file on Windows.
         const folded = try std.ascii.allocLowerString(arena, std.mem.trimEnd(u8, info.name, "/"));
@@ -164,6 +180,7 @@ pub fn check(arena: std.mem.Allocator, fr: *Io.File.Reader, limits: Limits, diag
     // pointing at the same bytes would each unpack them in full.
     std.mem.sort(Span, spans.items, {}, Span.lessThan);
     if (files == 0) return error.Empty; // also a zip with no entries at all: nothing below may assume one
+    if (bytes > limits.ratio_floor and bytes / limits.max_ratio > packed_bytes) return error.Inflated;
     for (spans.items[0 .. spans.items.len - 1], spans.items[1..]) |a, b| {
         if (b.start < a.end) return error.Overlap;
     }
@@ -789,6 +806,48 @@ test "entries that share their data are refused: a small zip can't unpack into a
         const result = check(arena.allocator(), &fr, .{}, &diag);
         if (overlap) try std.testing.expectError(error.Overlap, result) else _ = try result;
     }
+}
+
+test "a zip that unpacks to many times its own size is refused, a small one isn't" {
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    const data = "a video of fifty bytes, which barely shrinks at all";
+    const limits: Limits = .{ .max_ratio = 20, .ratio_floor = 100 };
+    // The directory claims `unpacked` bytes for 51 packed ones: what a
+    // deflated run of zeros looks like to `check`, which reads only that.
+    const cases = [_]struct { u32, Limits, ?Error }{
+        .{ data.len, limits, null }, // as packed: nothing to see
+        .{ 20 * data.len, limits, null }, // just at the ratio
+        .{ 20 * data.len + 20, limits, error.Inflated }, // just past it
+        .{ 1 << 20, limits, error.Inflated }, // a bomb
+        .{ 1 << 20, .{ .max_ratio = 20, .ratio_floor = 1 << 20 }, null }, // under the floor
+    };
+    for (cases) |c| {
+        var buf: [512]u8 = undefined;
+        var w: Io.Writer = .fixed(&buf);
+        try writeStored(arena.allocator(), &w, &.{.{ .name = "a.mp4", .data = data }});
+        const bytes = w.buffered();
+        const central = std.mem.findLast(u8, bytes, "PK\x01\x02").?;
+        std.mem.writeInt(u32, bytes[central + 24 ..][0..4], c[0], .little);
+        try tmp.dir.writeFile(io, .{ .sub_path = "b.zip", .data = bytes });
+        const f = try tmp.dir.openFile(io, "b.zip", .{});
+        defer f.close(io);
+        var rbuf: [512]u8 = undefined;
+        var fr = f.reader(io, &rbuf);
+        var diag: Diagnostic = .{};
+        const result = check(arena.allocator(), &fr, c[1], &diag);
+        if (c[2]) |e| try std.testing.expectError(e, result) else try std.testing.expectEqual(@as(u64, c[0]), (try result).bytes);
+    }
+}
+
+test "the limits fit real wallpapers: a 2 GiB video, a 64 MiB web page" {
+    const l: Limits = .{};
+    try std.testing.expect(2 << 30 <= l.max_bytes);
+    // A web page's text packs to about a fifth of its size: far from the ratio.
+    try std.testing.expect(64 << 20 <= l.ratio_floor and 5 < l.max_ratio);
 }
 
 test "export refuses a file that changed after it was measured" {
