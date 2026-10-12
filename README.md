@@ -4,7 +4,7 @@
 
 Set videos, pictures and animated GIFs as your desktop wallpaper, with one app and one library on both operating systems. zmural stays out of your way: it pauses the moment a game or fullscreen app takes over, uses almost nothing while it's hidden, and never does anything that could trip anti-cheat.
 
-> **Status: in development, no downloadable release yet.** zmural works day to day on Windows 11 and on Linux (KDE Plasma, GNOME, Sway and other Wayland desktops), and its source is public, but version 0.1 isn't published as a download. Until it is, the only way to run it is to [build it yourself](docs/BUILDING.md). [docs/MILESTONES.md](docs/MILESTONES.md) says exactly what's done on each OS.
+> **Status: early pre-release (0.1).** zmural works day to day on Windows 11 and on Linux (KDE Plasma, GNOME, Sway and other Wayland desktops), but it has had little time on other people's desktops yet. Download it from [Releases](https://github.com/AstraLibernis/zmural/releases), and please report what breaks. [docs/MILESTONES.md](docs/MILESTONES.md) says exactly what's done on each OS.
 
 ## Contents
 
@@ -57,7 +57,7 @@ There is no installer: you unpack a folder and run zmural from it.
 
 | | Windows | Linux |
 |---|---|---|
-| 1. Get it | Download `zmural-<version>-windows-x86_64.zip` and unzip it somewhere it can stay, for example `%LOCALAPPDATA%\Programs\zmural`. | Download `zmural-<version>-linux-x86_64.tar.gz` and extract it somewhere it can stay, for example `~/.local/opt/zmural`. Keep `bin` and `share` side by side. |
+| 1. Get it | Download `zmural-<version>-windows-x86_64.zip` from [Releases](https://github.com/AstraLibernis/zmural/releases) and unzip it somewhere it can stay, for example `%LOCALAPPDATA%\Programs\zmural`. | Download `zmural-<version>-linux-x86_64.tar.gz` from [Releases](https://github.com/AstraLibernis/zmural/releases) and extract it somewhere it can stay, for example `~/.local/opt/zmural`. Keep `bin` and `share` side by side. |
 | 2. Libraries | Nothing to install. | Install these from your system's package manager (see below). |
 | 3. Start it | Run `zmural.exe`. | Run `bin/zmural`. |
 
@@ -70,7 +70,7 @@ Arch:            sudo pacman -S mpv mesa pango cairo
 openSUSE:        sudo zypper install libmpv2 Mesa-libEGL1 libgbm1 libpango-1_0-0 libcairo2
 ```
 
-The downloads aren't published yet (see Status above); [docs/BUILDING.md](docs/BUILDING.md) makes the same zip or tarball from the source.
+Both downloads are on the [Releases](https://github.com/AstraLibernis/zmural/releases) page, with their SHA-256 checksums. [docs/BUILDING.md](docs/BUILDING.md) makes the same zip or tarball from the source.
 
 ## First run
 

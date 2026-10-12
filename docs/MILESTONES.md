@@ -20,7 +20,7 @@ The build plan, from an empty scaffold to a cross-platform release. It expands t
 | M2 | Process split | Windows | The renderer runs in its own process; crashes are contained | ✅ |
 | M3 | Real wallpapers | Windows | Videos and images play as wallpaper | ✅ |
 | M4 | Smart pausing | Windows | Games and fullscreen apps pause the wallpaper; 0 % GPU while hidden | ✅ |
-| M5 | Windows MVP | Windows | Tray, CLI, settings, library → **v0.1** (not published yet: it waits until most milestones are done) | 🔶 |
+| M5 | Windows MVP | Windows | Tray, CLI, settings, library → **v0.1** (published 2026-10-12 as a pre-release) | 🔶 |
 | M6 | Linux MVP | Linux | Same experience on wlr-layer-shell compositors, KDE Plasma and GNOME → **v0.2** | 🔶 |
 | M7 | Wallpapers that do more | both | Web wallpapers, properties and adjustments, JS API, audio, Lively import | 🔶 |
 | M8 | Polish | both | Rotation, a wallpaper and fill mode per monitor, span, transitions, updates and packages, sandbox, screensaver | 🔶 |
