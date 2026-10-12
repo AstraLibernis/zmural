@@ -32,7 +32,7 @@ and the controls inventory ([CONTROLS.md](CONTROLS.md)), which found controls no
 
 - [x] Zip bombs refused by ratio, and a zip capped at 4 GiB (fd39888)
 - [x] **Tray right-click on swaybar** (it calls `ContextMenu` and can't show the menu): opens the settings window (owner's choice, 2026-10-12). `tools/tray-test.sh` clicks swaybar's real icon, left and right, with a virtual pointer; the right-click step fails with the old no-op. Plasma's tray unchanged (`kde-test`, 20 of 20)
-- [ ] **Open folder, Open log, Show in folder:** say so when nothing could open it (Linux: `xdg-open`'s exit status; Windows: `ShellExecuteW`'s result)
+- [x] **Open folder, Open log, Show in folder** say so, with the path, when nothing could open it (Linux: `xdg-open`'s exit status, reaped so none is left a zombie as before; Windows: `ShellExecuteW`'s result). Every toast is in the log now too (`told: ...`). Linux: `tools/open-test.sh` presses the three with a virtual mouse, with no opener and with one (4 checks fail with the old code). Windows: compiled; for the Windows pass
 - [ ] **Uninstall from the window:** no lone "Yes", show that it's working, no ~4 s wait
 - [ ] **A test desktop like a user's:** a Sway rig with a session bus, swaybar's tray, a notification daemon, and real pointer input (`tray-test.sh` and `soak-test.sh` have them; the settings-window rigs don't yet)
 - [ ] **Every settings-window control pressed with real input, its effect checked, toasts included:** every row of [CONTROLS.md](CONTROLS.md) gets an `R:` on Linux

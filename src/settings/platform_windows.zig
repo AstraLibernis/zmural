@@ -247,7 +247,15 @@ pub fn showInFolder(path: []const u8) void {
     defer app.gpa.free(arg);
     const arg_w = std.unicode.wtf8ToWtf16LeAllocZ(app.gpa, arg) catch return;
     defer app.gpa.free(arg_w);
-    _ = w.ShellExecuteW(st.hwnd, null, w.L("explorer.exe"), arg_w, null, w.SW_SHOWNORMAL);
+    shell(w.ShellExecuteW(st.hwnd, null, w.L("explorer.exe"), arg_w, null, w.SW_SHOWNORMAL), "Explorer didn't start to show it. It is", path);
+}
+
+/// Says so when ShellExecuteW didn't start anything (it returns 32 or less
+/// then), instead of a button that does nothing.
+fn shell(rc: ?w.HINSTANCE, failed: []const u8, path: []const u8) void {
+    if (@intFromPtr(rc) > 32) return;
+    var buf: [160]u8 = undefined;
+    app_mod.showToast(std.fmt.bufPrint(&buf, "{s} {s}", .{ failed, path }) catch failed);
 }
 
 /// Opens a folder in Explorer, making it first if it's not there yet (a
@@ -257,7 +265,7 @@ pub fn openFolder(path: []const u8) void {
     std.Io.Dir.cwd().createDirPath(st.io, path) catch return app_mod.showToast("can't make that folder");
     const path_w = std.unicode.wtf8ToWtf16LeAllocZ(app.gpa, path) catch return;
     defer app.gpa.free(path_w);
-    _ = w.ShellExecuteW(st.hwnd, w.L("open"), path_w, null, null, w.SW_SHOWNORMAL);
+    shell(w.ShellExecuteW(st.hwnd, w.L("open"), path_w, null, null, w.SW_SHOWNORMAL), "Windows didn't open the folder. It is", path);
 }
 
 /// Opens a text file (the settings file, the log) in Notepad.
@@ -265,7 +273,7 @@ pub fn openFile(path: []const u8) void {
     if (path.len == 0) return;
     const path_w = std.unicode.wtf8ToWtf16LeAllocZ(app.gpa, path) catch return;
     defer app.gpa.free(path_w);
-    _ = w.ShellExecuteW(st.hwnd, w.L("open"), w.L("notepad.exe"), path_w, null, w.SW_SHOWNORMAL);
+    shell(w.ShellExecuteW(st.hwnd, w.L("open"), w.L("notepad.exe"), path_w, null, w.SW_SHOWNORMAL), "Notepad didn't start to show the log. It is", path);
 }
 
 /// Runs `zmural --uninstall` for the Uninstall button: it quits this zmural

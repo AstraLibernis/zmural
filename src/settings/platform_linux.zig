@@ -134,6 +134,8 @@ const State = struct {
     io: std.Io = undefined,
     /// A running `zmural-console import` (`startImport`).
     import_pid: ?linux.pid_t = null,
+    /// `xdg-open`s not yet reaped (`open`, `checkOpeners`).
+    openers: [4]Opener = @splat(.{}),
     test_pick: ?[]const u8 = null,
     conn: wl.Conn = undefined,
     registry: wl.ObjectId = 0,
@@ -727,6 +729,7 @@ fn loop() !void {
         if (now() >= st.last_poll_ms + app_mod.poll_ms) {
             st.last_poll_ms = now();
             app_mod.onPoll();
+            checkOpeners();
         }
         repeatKey();
         if (st.theme_dirty) {
@@ -1031,11 +1034,28 @@ pub fn startDaemon() !void {
     _ = try std.process.spawn(st.io, .{ .argv = &.{exe}, .stdin = .ignore, .stdout = .ignore, .stderr = .ignore });
 }
 
-/// Opens a text file (the settings file) in the desktop's editor.
+/// An `xdg-open` started by a button. It exits with an error when the
+/// desktop has nothing to open the thing with; the user is told then,
+/// instead of a button that does nothing.
+const Opener = struct {
+    /// Null: a free slot.
+    pid: ?linux.pid_t = null,
+    started_ms: u64 = 0,
+    /// What to say when it fails, before the path: "nothing opened the folder; ...".
+    failed: []const u8 = "",
+    /// What it was asked to open, kept for that message (the caller's slice may not live).
+    path: [std.Io.Dir.max_path_bytes]u8 = undefined,
+    path_len: usize = 0,
+};
+
+/// How long a failure is still news. Some openers stay in the foreground
+/// as long as the app they started; their exit later says nothing.
+const opener_news_ms = 10_000;
+
+/// Opens a text file (the log) in the desktop's editor.
 pub fn openFile(path: []const u8) void {
     if (path.len == 0) return;
-    _ = std.process.spawn(st.io, .{ .argv = &.{ "xdg-open", path }, .stdin = .ignore, .stdout = .ignore, .stderr = .ignore }) catch
-        app_mod.showToast("can't open it: xdg-open is missing");
+    open(path, "nothing opened the log; no app here opens text files. It is");
 }
 
 /// Opens a folder in the desktop's file manager, making it first if it's
@@ -1043,8 +1063,41 @@ pub fn openFile(path: []const u8) void {
 pub fn openFolder(path: []const u8) void {
     if (path.len == 0) return;
     std.Io.Dir.cwd().createDirPath(st.io, path) catch return app_mod.showToast("can't make that folder");
-    _ = std.process.spawn(st.io, .{ .argv = &.{ "xdg-open", path }, .stdin = .ignore, .stdout = .ignore, .stderr = .ignore }) catch
-        app_mod.showToast("can't open it: xdg-open is missing");
+    open(path, "nothing opened the folder; no file manager is set up here. It is");
+}
+
+fn open(path: []const u8, failed: []const u8) void {
+    const slot = for (&st.openers) |*o| {
+        if (o.pid == null) break o;
+    } else return app_mod.showToast("still opening the last ones; try again in a moment");
+    const child = std.process.spawn(st.io, .{ .argv = &.{ "xdg-open", path }, .stdin = .ignore, .stdout = .ignore, .stderr = .ignore }) catch
+        return toastPath("can't open it: xdg-open is missing. It is", path);
+    const n = @min(path.len, slot.path.len);
+    @memcpy(slot.path[0..n], path[0..n]);
+    slot.path_len = n;
+    slot.pid = child.id.?;
+    slot.started_ms = now();
+    slot.failed = failed;
+}
+
+/// Reaps the `xdg-open`s that ended, and says so if one failed soon after
+/// it started. Called every poll.
+fn checkOpeners() void {
+    for (&st.openers) |*o| {
+        const pid = o.pid orelse continue;
+        var status: u32 = 0;
+        const rc = linux.wait4(pid, &status, linux.W.NOHANG, null);
+        if (linux.errno(rc) == .SUCCESS and rc == 0) continue; // still running
+        o.pid = null;
+        if (linux.errno(rc) != .SUCCESS) continue;
+        const ok = linux.W.IFEXITED(status) and linux.W.EXITSTATUS(status) == 0;
+        if (!ok and now() -| o.started_ms <= opener_news_ms) toastPath(o.failed, o.path[0..o.path_len]);
+    }
+}
+
+fn toastPath(msg: []const u8, path: []const u8) void {
+    var buf: [160]u8 = undefined;
+    app_mod.showToast(std.fmt.bufPrint(&buf, "{s} {s}", .{ msg, path }) catch msg);
 }
 
 /// Shows the file selected in the desktop's file manager.
@@ -1059,7 +1112,7 @@ pub fn showInFolder(path: []const u8) void {
     w.endArray(arr);
     w.string("") catch return;
     _ = b.call("org.freedesktop.FileManager1", "/org/freedesktop/FileManager1", "org.freedesktop.FileManager1", "ShowItems", "ass", w.written()) catch
-        app_mod.showToast("the file manager didn't answer");
+        toastPath("no file manager answered to show it. It is", path);
 }
 
 // ---- file pickers (the XDG FileChooser portal) ------------------------------------------

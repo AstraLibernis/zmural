@@ -563,6 +563,9 @@ fn importPoll() void {
 }
 
 pub fn showToast(msg: []const u8) void {
+    // Logged too: what the user was told is in the log they report, and the
+    // rigs read it there.
+    std.log.scoped(.settings).info("told: {s}", .{msg});
     const n = @min(msg.len, app.toast.len);
     @memcpy(app.toast[0..n], msg[0..n]);
     app.toast_len = n;
