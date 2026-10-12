@@ -136,12 +136,13 @@ pub fn run(init: std.process.Init, out: *std.Io.Writer, args: []const []const u8
     try out.flush();
 }
 
-pub const export_usage = "usage: zmural-console export <wallpaper, package or folder> [<file.zip>]";
+pub const export_usage = "usage: zmural-console export <wallpaper, package or folder: a path, or a name in the library> [<file.zip>]";
 
 pub fn runExport(init: std.process.Init, out: *std.Io.Writer, args: []const []const u8) !void {
     if (args.len == 0 or args.len > 2 or std.mem.startsWith(u8, args[0], "--")) fail(2, export_usage, .{});
     const arena = init.arena.allocator();
-    const source = try client.absolutePath(arena, std.mem.trimEnd(u8, args[0], "/\\"));
+    const given = std.mem.trimEnd(u8, args[0], "/\\");
+    const source = try fromLibrary(init, given) orelse try client.absolutePath(arena, given);
     const dest = if (args.len == 2) args[1] else blk: {
         // Named like the wallpaper, here: "Neon Rain.zip", "rain.zip".
         const name = zmural.media.displayName(source);
@@ -156,6 +157,40 @@ pub fn runExport(init: std.process.Init, out: *std.Io.Writer, args: []const []co
     };
     try out.print("exported {d} file{s} ({Bi:.1}) to {s}\n", .{ res.files, if (res.files == 1) "" else "s", res.bytes, dest });
     try out.flush();
+}
+
+/// A bare name that isn't a file here ("rain.mp4", "Neon Rain"): the
+/// wallpaper of that name in zmural's library, as `zmural-console status` and
+/// the settings window name them. Null when it is a path, or a file here.
+fn fromLibrary(init: std.process.Init, name: []const u8) !?[]const u8 {
+    if (std.mem.findAny(u8, name, "/\\") != null) return null;
+    if (std.Io.Dir.cwd().statFile(init.io, name, .{})) |_| return null else |_| {}
+    const arena = init.arena.allocator();
+    const c = connect(init) orelse fail(3, "{s} isn't a file here, and zmural isn't running to look it up in the library: give its path", .{name});
+    defer c.close(init.gpa);
+    var found: std.ArrayList([]const u8) = .empty;
+    var offset: u32 = 0;
+    while (true) {
+        const ev = c.request(.{ .library = .{ .offset = offset } }) catch |err| fail(1, "zmural didn't answer ({s})", .{@errorName(err)});
+        if (ev != .library) break;
+        var it = std.mem.splitScalar(u8, ev.library.paths, control.list_sep);
+        var got: u32 = 0;
+        while (it.next()) |p| {
+            if (p.len == 0) continue;
+            got += 1;
+            if (std.mem.eql(u8, zmural.media.displayName(p), name)) try found.append(arena, try arena.dupe(u8, p));
+        }
+        offset += got;
+        if (got == 0 or offset >= ev.library.total) break;
+    }
+    switch (found.items.len) {
+        0 => fail(1, "no file {s} here, and no wallpaper by that name in the library", .{name}),
+        1 => {},
+        else => fail(1, "{d} wallpapers in the library are named {s}: give the path of the one you mean, e.g. {s}", .{ found.items.len, name, found.items[0] }),
+    }
+    const p = found.items[0];
+    // A package is listed by its manifest; it is exported as its folder.
+    return if (std.ascii.eqlIgnoreCase(std.fs.path.basename(p), zmural.media.package_manifest)) std.fs.path.dirname(p) orelse p else p;
 }
 
 /// The running zmural, or null when there's none (or the one answering

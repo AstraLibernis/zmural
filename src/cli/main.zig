@@ -30,7 +30,8 @@ const usage =
     \\  import <file.zip> [--to <folder>] [--apply]
     \\                                  unpack a wallpaper package or a zip of videos
     \\                                  and pictures into a library folder (checked first)
-    \\  export <wallpaper> [<file.zip>]  pack a wallpaper, a package or a folder of them
+    \\  export <wallpaper> [<file.zip>]  pack a wallpaper (its path, or its name in the
+    \\                                  library), a package or a folder of them
     \\                                  into a zip that imports anywhere
     \\  props                           list the wallpaper's properties
     \\  prop <name> <value>             change one (e.g. prop speed 1.5)

@@ -112,6 +112,17 @@ rc=$(imp "$W/ex/sun.zip" --to "$W/back")
 check "a folder exported and imported again is the same, byte for byte" "[ $rc = 0 ] && diff -r $V/Sunsets $W/back/Sunsets"
 z export "$V/Sunsets" "$W/ex/sun.zip" >"$W/out.txt" 2>&1; rc=$?
 check "export never overwrites a zip (exit $rc)" "[ $rc = 1 ] && grep -q 'already exists' $W/out.txt"
+# By name, as status and the settings window name them, from anywhere.
+(cd "$W/ex" && z export green.png >"$W/out.txt" 2>&1); rc=$?
+check "export by a file's name in the library (exit $rc)" "[ $rc = 0 ] && unzip -l $W/ex/green.zip | grep -q green.png"
+(cd "$W/ex" && z export red-still named.zip >"$W/out.txt" 2>&1); rc=$?
+check "…and by a package's name: its folder (exit $rc)" "[ $rc = 0 ] && unzip -l $W/ex/named.zip | grep -q 'red-still/zmural.toml'"
+(cd "$W/ex" && z export nosuch.mp4 >"$W/out.txt" 2>&1); rc=$?
+check "…a name nothing has is refused, saying so (exit $rc)" "[ $rc = 1 ] && grep -q 'no wallpaper by that name' $W/out.txt"
+mkdir -p "$HOME/Pictures/Wallpapers"; cp "$V/green.png" "$HOME/Pictures/Wallpapers/"; z rescan; sleep 1
+(cd "$W/ex" && z export green.png again.zip >"$W/out.txt" 2>&1); rc=$?
+check "…and so is a name two wallpapers share, asking for the path (exit $rc)" "[ $rc = 1 ] && grep -q '2 wallpapers in the library are named green.png' $W/out.txt && [ ! -e $W/ex/again.zip ]"
+rm "$HOME/Pictures/Wallpapers/green.png"; z rescan
 head -c 300M /dev/urandom >"$W/big.mp4"
 t0=$(date +%s%N); z export "$W/big.mp4" "$W/ex/big.zip" >/dev/null 2>&1; rc=$?; ms=$(( ($(date +%s%N) - t0) / 1000000 ))
 rc2=$(imp "$W/ex/big.zip" --to "$W/bigback")
