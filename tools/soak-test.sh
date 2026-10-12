@@ -134,7 +134,8 @@ for r in $(seq 1 "$ROUNDS"); do
   z prop brightness -30; z prop speed 1.5; step 0.6; z prop --reset; step 0.6
   timeout 10 "$BIN/zmural" --settings >/dev/null 2>&1; step 1.5
   swaymsg -q '[app_id="org.zmural.Settings"] kill'; step
-  z apply "$W/broken.mp4"; step 2
+  # Refused (exit 1) once its renderer finds it can't play it; zmural goes back.
+  timeout 10 "$BIN/zmural-console" apply "$W/broken.mp4" >/dev/null 2>&1 && echo "round $r: apply of a broken file exited 0" >>"$W/refused.log"; step 1
   sed -i "s/^volume = .*/volume = $((r % 100))/" "$W/cfg/settings.toml"; step 2.5
   z import "$W/zips/pack.zip" --to "$P"; z rescan; step
   rm -rf "$P"/pack*; z rescan

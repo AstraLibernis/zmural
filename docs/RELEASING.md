@@ -90,8 +90,8 @@ Before publishing:
 - Linux: `tools/package-test.sh` (the tarball extracted into an empty home) and
   `tools/package-debian-test.sh` (inside Debian 12).
 - Windows: CI unzips the package into an empty folder on the Windows runner and runs it;
-  also try it once on a real Windows desktop before publishing (that step isn't automated:
-  no runner shows a picture).
+  on a real Windows desktop, [WINDOWS-PASS.md](WINDOWS-PASS.md) before publishing (no
+  runner clicks a window).
 
 ## Reading a crash report from a released build
 

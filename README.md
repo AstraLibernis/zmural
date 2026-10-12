@@ -223,6 +223,7 @@ zmural takes the proven ideas from both and drops the weight. The zmural column 
 - [docs/MILESTONES.md](docs/MILESTONES.md): the plan, release by release, and what works on each OS.
 - [docs/RELEASING.md](docs/RELEASING.md): working builds versus released builds, publishing a release, and reading crash reports.
 - [docs/CONTROLS.md](docs/CONTROLS.md): every button, menu item and command, and what tests it.
+- [docs/WINDOWS-PASS.md](docs/WINDOWS-PASS.md): the by-hand check on a real Windows desktop before each release.
 
 ## Acknowledgements
 
