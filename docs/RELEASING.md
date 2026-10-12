@@ -7,35 +7,63 @@ compiled and what goes into them.
 |---|---|---|
 | For | Development, the test rigs, CI, trying a change | What users download |
 | How | `zig build` (and `zig build test`) | `zig build package` (below) |
-| Mode | Debug | ReleaseSafe |
-| Safety checks (bounds, overflow, bad casts) | on | **on** |
+| Mode | Debug | ReleaseFast |
+| Safety checks (bounds, overflow, bad casts) | on | off |
 | Speed | slow: never measure speed or timing on it | full |
 | Debugging info | inside the programs | **taken out**, kept beside the download (Linux keeps the symbol table, so `file` still says "not stripped") |
 | Where | `zig-out/bin` | `zig-out/package` |
 
-**Safety checks stay on in released builds.** ReleaseSafe stops zmural with a message when
-a memory bug would otherwise corrupt memory, which matters for a program that opens files
-people download. ReleaseFast removes those checks for a speed gain zmural doesn't need
-(it mostly waits on the GPU). Don't ship it.
+**Released builds are ReleaseFast (maintainer's decision, 2026-10-12).** Playing a video,
+ReleaseSafe, ReleaseFast and ReleaseSmall use the same CPU (the GPU and libmpv do the
+work), and the programs are a few MB in any mode. The cost of ReleaseFast: a memory bug
+that ReleaseSafe would stop with a message can corrupt memory silently instead. So
+correctness is judged where the checks are on: the unit tests and the working build
+(Debug). Panics and faults are still logged with a crash code in ReleaseFast
+(`tools/crash-test.sh`).
 
 **Measuring:** speed, CPU and timing are measured on ReleaseSafe or ReleaseFast builds,
 never on the working (Debug) build, which can be ten times slower.
 
-## Making a release
+## Publishing a release (CI)
+
+A release goes from the source on `main` to GitHub by a tag; CI builds, tests and
+publishes it. Nothing is built on a developer's machine.
+
+1. Set the version in `build.zig.zon` (`.version`), and write the release notes in
+   `docs/releases/v<version>.md` (what's new, known limitations). Commit and push to `main`.
+2. **Preview (optional):** Actions > CI > Run workflow on `main`. It runs every test, builds
+   both packages, and puts them in a **draft** release with those notes, which only the
+   maintainer can see. Run it again after a fix: the draft's files are replaced.
+3. `tools/release.sh` checks the version, the notes and that `main` is pushed, then tags
+   `v<version>` and pushes the tag. CI runs everything again on the tagged commit and
+   **publishes** the release (a 0.x version as a pre-release), replacing a preview draft
+   of the same version if there is one.
+
+Each release has the Windows zip, the Linux tarball, their debugging info
+(`*-debug.zip`, `*-debug.tar.gz`) and `SHA256SUMS.txt`; the checksums are added to the
+notes. If a test fails, nothing is published; fix it on `main` and make a new version, since
+a published tag is never moved.
+
+What CI tests before publishing: the unit tests on both OSes; on Windows the zip itself,
+unzipped into an empty folder and run (playback through libmpv, the CLI, crash codes,
+start with Windows, the uninstaller); on Linux the tarball's contents, its glibc ceiling and
+its debugging info. A hosted Linux runner has no GPU, so the tarball's desktop tests
+(`tools/package-test.sh`, `tools/package-debian-test.sh`, `tools/crash-test.sh`) run on a
+machine with one before tagging.
+
+## Building a package by hand
 
 ```
 # Windows (on Windows): zmural-<version>-windows-x86_64.zip
-# CI makes the same zip, tests it, and keeps it with its debug folder as the run's
-# zmural-windows-release artifact (run by hand, or on a v* tag).
 # The -Dtarget builds for every x86-64 PC, not just this machine's CPU.
-zig build package -Doptimize=ReleaseSafe -Dtarget=x86_64-windows
+zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-windows
 
 # Linux: zmural-<version>-linux-x86_64.tar.gz
 # The -Dtarget sets the oldest glibc (Debian 12) and a baseline x86-64 CPU; the KDE
 # plugin and GNOME extension are built inside a Debian 13 root (tools/plugin-root.sh
 # makes it once), the oldest system that meets what they declare, so they load there
 # and on everything newer.
-zig build package -Doptimize=ReleaseSafe -Dtarget=x86_64-linux-gnu.2.36 -Dplugin-root=$(tools/plugin-root.sh)
+zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-linux-gnu.2.36 -Dplugin-root=$(tools/plugin-root.sh)
 ```
 
 The Linux target names the oldest glibc the tarball must run on (Debian 12); without it

@@ -7,12 +7,12 @@
 # the oldest distro the tarball claims. The root is downloaded once (about
 # 100 MB) and its libraries installed with apt, which needs sudo.
 #
-#   zig build package -Doptimize=ReleaseSafe -Dtarget=x86_64-linux-gnu.2.36 -Dplugin-root=$(tools/plugin-root.sh)
+#   zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-linux-gnu.2.36 -Dplugin-root=$(tools/plugin-root.sh)
 #   tools/package-debian-test.sh
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 TGZ=$(ls "$ROOT"/zig-out/package/zmural-*-linux-x86_64.tar.gz 2>/dev/null | head -1)
-[ -n "$TGZ" ] || { echo "no tarball: zig build package -Doptimize=ReleaseSafe -Dtarget=x86_64-linux-gnu.2.36 -Dplugin-root=$(tools/plugin-root.sh)"; exit 1; }
+[ -n "$TGZ" ] || { echo "no tarball: zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-linux-gnu.2.36 -Dplugin-root=$(tools/plugin-root.sh)"; exit 1; }
 D=${ZMURAL_DEBIAN_ROOT:-/tmp/zmural-debian12}
 if [ ! -x "$D/usr/lib/x86_64-linux-gnu/libmpv.so.2" ] && [ ! -e "$D/usr/lib/x86_64-linux-gnu/libmpv.so.2" ]; then
   base=https://images.linuxcontainers.org/images/debian/bookworm/amd64/default

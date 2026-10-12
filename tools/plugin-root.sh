@@ -9,7 +9,7 @@
 # Debian 13; Qt 6.8 there), not on the newest machine at hand.
 #
 #   tools/plugin-root.sh       # once: about 2 GB, apt needs sudo
-#   zig build package -Doptimize=ReleaseSafe -Dtarget=x86_64-linux-gnu.2.36 -Dplugin-root=$(tools/plugin-root.sh)
+#   zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-linux-gnu.2.36 -Dplugin-root=$(tools/plugin-root.sh)
 set -u
 # Not under ~/.cache/zmural: `zmural-console uninstall` deletes that folder.
 D=${ZMURAL_PLUGIN_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/zmural-build/debian13}

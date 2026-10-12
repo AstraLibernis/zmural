@@ -124,13 +124,13 @@ pub fn build(b: *std.Build) void {
     else
         .{ .custom = "share/zmural/wallpapers" }, starter_wallpaper_name).step);
 
-    // `zig build package -Doptimize=ReleaseSafe -Dtarget=x86_64-windows` (Windows): a ready-to-share
+    // `zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-windows` (Windows): a ready-to-share
     // folder and zip in zig-out/package, with the licences the bundled
     // libmpv (LGPL-2.1) and WebView2 (BSD-3-Clause) require.
     if (os == .windows) {
         const name = b.fmt("zmural-{s}-windows-x86_64", .{zon.version});
         const dir: std.Build.InstallDir = .{ .custom = b.fmt("package/{s}", .{name}) };
-        const package = b.step("package", "Build the Windows release folder and zip (use -Doptimize=ReleaseSafe -Dtarget=x86_64-windows)");
+        const package = b.step("package", "Build the Windows release folder and zip (use -Doptimize=ReleaseFast -Dtarget=x86_64-windows)");
         // Windows' own bsdtar writes zips; a GNU tar earlier on PATH (Git Bash) can't.
         const system_root = b.graph.environ_map.get("SystemRoot") orelse "C:\\Windows";
         const zip = b.addSystemCommand(&.{ b.pathJoin(&.{ system_root, "System32", "tar.exe" }), "-a", "-c", "-f" });
@@ -171,7 +171,7 @@ pub fn build(b: *std.Build) void {
         // Built for this machine's own CPU, the programs could use
         // instructions (AVX-512, say) other PCs don't have, and crash there.
         if (target.query.isNativeCpu() or target.query.cpu_model == .native) {
-            package.dependOn(&b.addFail("build the release for every x86-64 PC, not this one's CPU: zig build package -Doptimize=ReleaseSafe -Dtarget=x86_64-windows").step);
+            package.dependOn(&b.addFail("build the release for every x86-64 PC, not this one's CPU: zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-windows").step);
         } else package.dependOn(&zip.step);
     }
 
@@ -294,7 +294,7 @@ pub fn build(b: *std.Build) void {
         gnome_extension = &run.step;
     }
 
-    // `zig build package -Doptimize=ReleaseSafe -Dtarget=x86_64-linux-gnu.2.36`
+    // `zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-linux-gnu.2.36`
     // (Linux): a ready-to-share folder and .tar.gz in zig-out/package, the
     // counterpart of the Windows zip. zmural itself is built against an old
     // glibc (the -Dtarget) so it runs on distros older than this one; the
@@ -304,9 +304,9 @@ pub fn build(b: *std.Build) void {
     if (os == .linux) {
         const name = b.fmt("zmural-{s}-linux-x86_64", .{zon.version});
         const dir: std.Build.InstallDir = .{ .custom = b.fmt("package/{s}", .{name}) };
-        const package = b.step("package", "Build the Linux release folder and .tar.gz (use -Doptimize=ReleaseSafe -Dtarget=x86_64-linux-gnu.2.36)");
+        const package = b.step("package", "Build the Linux release folder and .tar.gz (use -Doptimize=ReleaseFast -Dtarget=x86_64-linux-gnu.2.36)");
         if (target.query.glibc_version == null) {
-            package.dependOn(&b.addFail("name the oldest glibc the package must run on, so no newer symbol slips in: zig build package -Doptimize=ReleaseSafe -Dtarget=x86_64-linux-gnu.2.36 -Dplugin-root=$(tools/plugin-root.sh)").step);
+            package.dependOn(&b.addFail("name the oldest glibc the package must run on, so no newer symbol slips in: zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-linux-gnu.2.36 -Dplugin-root=$(tools/plugin-root.sh)").step);
         } else if (plugin_root == null) {
             package.dependOn(&b.addFail("build the KDE plugin and GNOME extension on the oldest system they declare, so they load there and on everything newer: -Dplugin-root=$(tools/plugin-root.sh)").step);
         } else {

@@ -7,7 +7,7 @@
 # the right function with the kept debug file. The crashes are made on
 # purpose with ZMURAL_TEST_CRASH, on a headless Sway.
 #
-#   zig build && zig build package -Doptimize=ReleaseSafe -Dtarget=x86_64-linux-gnu.2.36 -Dplugin-root=$(tools/plugin-root.sh)
+#   zig build && zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-linux-gnu.2.36 -Dplugin-root=$(tools/plugin-root.sh)
 #   tools/crash-test.sh
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)

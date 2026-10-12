@@ -8,20 +8,17 @@
 # window, add itself to the app menu and autostart from where it was
 # extracted, and quit cleanly. Also: which glibc it needs.
 #
-#   zig build package -Doptimize=ReleaseSafe -Dtarget=x86_64-linux-gnu.2.36 -Dplugin-root=$(tools/plugin-root.sh)
+#   zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-linux-gnu.2.36 -Dplugin-root=$(tools/plugin-root.sh)
 #   tools/package-test.sh
+#   tools/package-test.sh --contents   # only the checks that need no display or GPU (CI)
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 TGZ=$(ls "$ROOT"/zig-out/package/zmural-*-linux-x86_64.tar.gz 2>/dev/null | head -1)
-[ -n "$TGZ" ] || { echo "no tarball: zig build package -Doptimize=ReleaseSafe -Dtarget=x86_64-linux-gnu.2.36 -Dplugin-root=$(tools/plugin-root.sh)"; exit 1; }
+[ -n "$TGZ" ] || { echo "no tarball: zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-linux-gnu.2.36 -Dplugin-root=$(tools/plugin-root.sh)"; exit 1; }
 W=${TMPDIR:-/tmp}/zmural-package-test
 rm -rf "$W"; mkdir -p "$W/xdg" "$W/home/Pictures/Wallpapers" "$W/home/opt" "$W/bin"; chmod 700 "$W/xdg"
 tar -xzf "$TGZ" -C "$W/home/opt"
 Z=$(ls -d "$W"/home/opt/zmural-*); BIN=$Z/bin
-cp "$(command -v sway)" "$W/bin/sway-nocap"
-export XDG_RUNTIME_DIR=$W/xdg HOME=$W/home
-unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME ZMURAL_CONFIG_DIR WAYLAND_DISPLAY DBUS_SESSION_BUS_ADDRESS XDG_CURRENT_DESKTOP SWAYSOCK
-magick -size 320x180 xc:red "$HOME/Pictures/Wallpapers/red.png"
 
 FAIL=0
 check() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; FAIL=1; fi; }
@@ -34,6 +31,16 @@ check "zmural-console needs no libc at all" "! objdump -p $BIN/zmural-console | 
 DBG=$(dirname "$TGZ")/debug/$(basename "$Z")
 check "no debugging info ships, and no build-folder path" "! readelf -S $BIN/zmural | grep -q debug_info && ! strings $BIN/zmural $BIN/zmural-console | grep -q '$ROOT'"
 check "the debugging info kept beside the tarball matches each program (build ID)" "for f in zmural zmural-console; do [ \"\$(readelf -n $BIN/\$f 2>/dev/null | grep 'Build ID')\" = \"\$(readelf -n $DBG/\$f.debug | grep 'Build ID')\" ] || exit 1; done"
+
+if [ "${1:-}" = --contents ]; then
+  [ $FAIL = 0 ] && echo "all passed (contents only)" || { echo "FAILED"; exit 1; }
+  exit 0
+fi
+
+cp "$(command -v sway)" "$W/bin/sway-nocap"
+export XDG_RUNTIME_DIR=$W/xdg HOME=$W/home
+unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME ZMURAL_CONFIG_DIR WAYLAND_DISPLAY DBUS_SESSION_BUS_ADDRESS XDG_CURRENT_DESKTOP SWAYSOCK
+magick -size 320x180 xc:red "$HOME/Pictures/Wallpapers/red.png"
 
 printf 'output HEADLESS-1 resolution 1280x720 position 0 0\n' >"$W/sway.conf"
 WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=gles2 setsid "$W/bin/sway-nocap" -c "$W/sway.conf" >"$W/sway.log" 2>&1 </dev/null &

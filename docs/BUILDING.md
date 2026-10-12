@@ -13,7 +13,7 @@ You need Zig 0.16 and two third-party runtimes, which aren't in git; `.github/wo
 
 ```
 zig build                                                          # the programs, in zig-out/bin
-zig build package -Doptimize=ReleaseSafe -Dtarget=x86_64-windows   # the release zip, in zig-out/package
+zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-windows   # the release zip, in zig-out/package
 ```
 
 ## Linux
@@ -21,17 +21,17 @@ zig build package -Doptimize=ReleaseSafe -Dtarget=x86_64-windows   # the release
 You need Zig 0.16 and the runtime libraries from the README's [Install](../README.md#install) section. The KDE plugin and the GNOME extension have build tools of their own: CMake, Ninja, pkg-config, gettext, EGL/GLES/GBM dev files, and Qt 6 (KDE) or GTK 4.10+ and GObject-Introspection (GNOME). The full list is the package list in `tools/plugin-root.sh`. `-Dplugin-root` also needs `bwrap` (bubblewrap), and `package` needs `objcopy` (binutils).
 
 ```
-zig build -Doptimize=ReleaseSafe                   # the programs, in zig-out/bin
-zig build kde-plugin -Doptimize=ReleaseSafe        # KDE Plasma only (build tools above)
-zig build gnome-extension -Doptimize=ReleaseSafe   # GNOME only (build tools above)
-zig build package -Doptimize=ReleaseSafe -Dtarget=x86_64-linux-gnu.2.36 -Dplugin-root=$(tools/plugin-root.sh)   # all of it, as the release tarball in zig-out/package
+zig build -Doptimize=ReleaseFast                   # the programs, in zig-out/bin
+zig build kde-plugin -Doptimize=ReleaseFast        # KDE Plasma only (build tools above)
+zig build gnome-extension -Doptimize=ReleaseFast   # GNOME only (build tools above)
+zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-linux-gnu.2.36 -Dplugin-root=$(tools/plugin-root.sh)   # all of it, as the release tarball in zig-out/package
 ```
 
 zmural itself is tried on Debian 12 (glibc 2.36). The KDE plugin and GNOME extension are built inside a Debian 13 root (`tools/plugin-root.sh` makes it once, in `~/.cache/zmural-build/debian13`; `$ZMURAL_PLUGIN_ROOT` puts it elsewhere), the oldest system with what they declare, so they load there and on everything newer. It is kept out of `~/.cache/zmural`, which `zmural-console uninstall` deletes.
 
 ## Working builds and released builds
 
-A plain `zig build` is a working (Debug) build: slow, and full of debugging info. What is released is a separate, stripped ReleaseSafe build. [RELEASING.md](RELEASING.md) explains the two, how to make a release, and how to read a crash report from one. Never measure speed on a working build.
+A plain `zig build` is a working (Debug) build: slow, and full of debugging info. What is released is a separate, stripped ReleaseFast build. [RELEASING.md](RELEASING.md) explains the two, how to make a release, and how to read a crash report from one. Never measure speed on a working build.
 
 ## Everyday commands
 

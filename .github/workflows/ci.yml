@@ -8,11 +8,14 @@
 # milestone or a major push, not on every push:
 # - by hand: Actions > CI > Run workflow;
 # - a pushed tag: v* (a release) or milestone-* (a finished milestone);
-# A run by hand or on a v* tag keeps the tested Windows zip as a run artifact.
 # - a push to main whose last commit message contains [full ci].
 # Other pushes start it and every job is skipped, which costs nothing.
 # Linux is tested on real desktops by the maintainer, and on the headless rigs in
 # tools/ during development.
+#
+# Releases (docs/RELEASING.md): a run by hand or on a v* tag also builds both
+# packages and tests them; the release job then puts them in a draft release
+# (by hand: a preview) or publishes it (a v* tag, from tools/release.sh).
 name: CI
 
 on:
@@ -37,7 +40,7 @@ jobs:
   linux:
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') || contains(github.event.head_commit.message, '[full ci]')
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Install Zig
@@ -47,7 +50,7 @@ jobs:
       - name: Unit tests
         run: zig build test --summary all
       - name: Release build
-        run: zig build -Doptimize=ReleaseSafe --summary all
+        run: zig build -Doptimize=ReleaseFast --summary all
       - name: Display codec against waywallen's C codec
         run: zig build ww-codec-check -Dwaywallen-display=third_party/waywallen-display --summary all
       - name: Windows cross-build compiles, tests included
@@ -57,6 +60,43 @@ jobs:
       # (takeover, CLI, settings.toml edits) runs wherever a GPU exists.
       - name: Boot test
         run: tools/instance-test.sh
+      # The release tarball, on a run by hand or a v* tag. The KDE plugin and
+      # GNOME extension are built inside a Debian 13 root (tools/plugin-root.sh)
+      # through bubblewrap, which Ubuntu allows only with its user-namespace
+      # restriction lifted.
+      - name: Release package (the tarball)
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        run: |
+          sudo apt-get install -y -qq bubblewrap >/dev/null
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          root=$(tools/plugin-root.sh)
+          zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-linux-gnu.2.36 -Dplugin-root="$root" --summary all
+      # No GPU here, so not on a desktop: what it holds, and that both programs
+      # start from it (zmural refusing for want of a GPU node, as it should).
+      - name: The tarball as a user gets it
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tools/package-test.sh --contents
+          d=$(mktemp -d); tar -xzf zig-out/package/zmural-*-linux-x86_64.tar.gz -C "$d"
+          b=$(ls -d "$d"/zmural-*)/bin
+          "$b/zmural-console" version
+          mkdir -m 700 "$d/run"
+          set +e
+          XDG_RUNTIME_DIR=$d/run ZMURAL_CONFIG_DIR=$d/cfg XDG_CONFIG_HOME=$d/xc XDG_DATA_HOME=$d/xd timeout 10 "$b/zmural" >"$d/z.log" 2>&1
+          rc=$?
+          set -e
+          cat "$d/z.log"
+          [ $rc = 2 ] && grep -q 'no GPU render node' "$d/z.log"
+      - name: Keep the release tarball
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: zmural-linux-release
+          path: |
+            zig-out/package/zmural-*-linux-x86_64.tar.gz
+            zig-out/package/debug/
+          if-no-files-found: error
+          retention-days: 30
 
   windows:
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') || contains(github.event.head_commit.message, '[full ci]')
@@ -74,7 +114,7 @@ jobs:
       - name: Unit tests
         run: zig build test --summary all
       - name: Release build
-        run: zig build -Doptimize=ReleaseSafe --summary all
+        run: zig build -Doptimize=ReleaseFast --summary all
       # Zip import and export on Windows, against Windows' own zip writer and
       # reader (Compress-Archive, .NET's ZipArchive, Expand-Archive). No
       # zmural running: --to names the folder.
@@ -237,7 +277,7 @@ jobs:
           "Source: $wvUrl (Microsoft.Web.WebView2 1.0.4191.47, build/native/x64)`nSHA-256 of the package: $wvSha" | Out-File -Encoding utf8 third_party\webview2\SOURCE.txt
           Get-ChildItem third_party\mpv, third_party\webview2 | Format-Table Name, Length
       - name: Release package (the zip)
-        run: zig build package -Doptimize=ReleaseSafe -Dtarget=x86_64-windows --summary all
+        run: zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-windows --summary all
       - name: The zip as a user gets it (unzipped into an empty folder, then run)
         shell: pwsh
         run: |
@@ -372,3 +412,22 @@ jobs:
             zig-out/package/debug/
           if-no-files-found: error
           retention-days: 30
+
+  # Only after both OSes passed. Tag and version must agree, and the notes
+  # come from docs/releases/v<version>.md (tools/release-publish.sh).
+  release:
+    needs: [linux, windows]
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/artifacts
+      - name: Draft (by hand) or publish (a v* tag)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: tools/release-publish.sh "$RUNNER_TEMP/artifacts"
