@@ -42,13 +42,13 @@ up() { # wallpaper
 down() { kill $ZD 2>/dev/null; sleep 0.7; }
 told() { grep -c "No GPU decoder for $1 found" "$W/notify.log"; }
 
-# As if VP9 had been on the CPU before a driver or codec was installed.
+# As if a VP9 file had played on the CPU before (another profile, another size).
 printf 'cpu-decode vp9\ncpu-decode other\n' >"$W/cfg/notices"
 up "$W/vp9.webm"
 check "a video says what decodes it" "grep -qE 'decoding vp9 on the (GPU|CPU)' $W/daemon.log"
 if grep -q 'decoding vp9 on the GPU' "$W/daemon.log"; then
   check "a video on the GPU brings no notification" "[ \$(told VP9) = 0 ]"
-  check "…and its old 'told' note is dropped, the others kept" "! grep -q 'cpu-decode vp9' $W/cfg/notices && grep -qx 'cpu-decode other' $W/cfg/notices"
+  check "…and its 'told' note is kept, as the notice promised: the next VP9 file may be on the CPU again" "grep -qx 'cpu-decode vp9' $W/cfg/notices && grep -qx 'cpu-decode other' $W/cfg/notices"
 fi
 
 # A picture: decoded once, and GPUs don't decode pictures. Nothing to tell.

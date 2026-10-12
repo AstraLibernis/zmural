@@ -1713,10 +1713,11 @@ fn onRendererReadable(r: *Renderer) void {
 /// that decide, and the wallpaper plays either way.
 ///
 /// This is the check, and it runs every time a video starts: mpv asks the
-/// system afresh, so codecs or drivers installed (or removed) since are
-/// picked up by the next wallpaper change or restart. Only the "already
-/// told" note is kept, and it is dropped once the GPU decodes that codec, so
-/// losing the decoder again is news again.
+/// system afresh, so codecs or drivers installed since are picked up by the
+/// next wallpaper change or restart. The "already told" note is kept for
+/// good, as the notice promises: whether the GPU decodes a codec can depend
+/// on the file (its profile, its size), so one file of it on the GPU says
+/// nothing about the next (the blind test of 0.1.0 was told about VP9 twice).
 fn onDecoder(r: *Renderer, d: proto.Decoder) void {
     const codec = if (notices.plain(d.codec)) d.codec else "video";
     var key_buf: [40]u8 = undefined;
@@ -1724,7 +1725,6 @@ fn onDecoder(r: *Renderer, d: proto.Decoder) void {
     if (d.method.len > 0) {
         const method = if (notices.plain(d.method)) d.method else "hardware";
         log.info("renderer {d}: decoding {s} on the GPU ({s})", .{ r.id, codec, method });
-        if (rt.opts.state_dir) |dir| notices.forget(rt.io, rt.gpa, dir, key);
         return;
     }
     // A picture is decoded once, and GPUs don't decode pictures (or GIFs):

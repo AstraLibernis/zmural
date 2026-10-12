@@ -40,7 +40,7 @@ and the controls inventory ([CONTROLS.md](CONTROLS.md)), which found controls no
 - [ ] Small bugs from the blind test:
   - [x] `zmural-console apply` waits until the wallpaper shows (about 0.2 s) or zmural says it can't, and then exits 1 with the renderer's reason; a file fixed after failing gets a fresh try. `status` carries what last played and what last failed. `tools/broken-test.sh` (each part mutation-checked); Windows compiled
   - [x] `zmural-console export <name>` takes a library name too (a file's or a package's, as `status` names them; two of the same name ask for the path). `tools/import-test.sh`
-  - [ ] the VP9 "you won't be told again" notice came twice
+  - [x] the "you won't be told again" codec notice came twice: the note is now kept for good, as it promises (one file of a codec on the GPU says nothing about the next). `tools/decode-test.sh`
   - [ ] the mini-player says "Playing" while `status` says paused (covered)
   - [ ] two imports of the same zip show the same tile name
   - [ ] a bad value in `settings.toml` is only logged; tell the user once

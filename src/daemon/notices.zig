@@ -58,29 +58,6 @@ pub fn remember(io: std.Io, gpa: std.mem.Allocator, dir: []const u8, key: []cons
         std.log.warn("can't write {s}: {s}", .{ path, @errorName(err) });
 }
 
-/// Drops `key`, so the user is told again if it becomes true again.
-pub fn forget(io: std.Io, gpa: std.mem.Allocator, dir: []const u8, key: []const u8) void {
-    const old = read(io, gpa, dir) orelse return;
-    defer gpa.free(old);
-    var kept: std.ArrayList(u8) = .empty;
-    defer kept.deinit(gpa);
-    var found = false;
-    var lines = std.mem.tokenizeScalar(u8, old, '\n');
-    while (lines.next()) |line| {
-        if (std.mem.eql(u8, line, key)) {
-            found = true;
-            continue;
-        }
-        kept.appendSlice(gpa, line) catch return;
-        kept.append(gpa, '\n') catch return;
-    }
-    if (!found) return;
-    const path = std.fs.path.join(gpa, &.{ dir, file_name }) catch return;
-    defer gpa.free(path);
-    std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = kept.items }) catch |err|
-        std.log.warn("can't write {s}: {s}", .{ path, @errorName(err) });
-}
-
 fn read(io: std.Io, gpa: std.mem.Allocator, dir: []const u8) ?[]u8 {
     const path = std.fs.path.join(gpa, &.{ dir, file_name }) catch return null;
     defer gpa.free(path);
@@ -117,9 +94,4 @@ test "a notice is remembered across reads, per key, in a directory made on deman
     try std.testing.expect(seen(io, gpa, dir, "cpu-decode h264"));
     try std.testing.expect(seen(io, gpa, dir, "cpu-decode hevc"));
 
-    // Forgetting one leaves the other, and forgetting it twice is harmless.
-    forget(io, gpa, dir, "cpu-decode h264");
-    forget(io, gpa, dir, "cpu-decode h264");
-    try std.testing.expect(!seen(io, gpa, dir, "cpu-decode h264"));
-    try std.testing.expect(seen(io, gpa, dir, "cpu-decode hevc"));
 }
