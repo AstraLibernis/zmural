@@ -42,7 +42,7 @@ and the controls inventory ([CONTROLS.md](CONTROLS.md)), which found controls no
   - [x] `zmural-console export <name>` takes a library name too (a file's or a package's, as `status` names them; two of the same name ask for the path). `tools/import-test.sh`
   - [x] the "you won't be told again" codec notice came twice: the note is now kept for good, as it promises (one file of a codec on the GPU says nothing about the next). `tools/decode-test.sh`
   - [x] the player card said "Playing" while a pause rule held the wallpaper; it says which now ("Paused: windows cover it"), unit-tested for every rule, seen on Sway
-  - [ ] two imports of the same zip show the same tile name
+  - [x] two imports of the same zip showed the same tile name; a name two wallpapers share now carries its folder ("sun.png · Sunsets (2)"), unit-tested, seen on Sway
   - [ ] a bad value in `settings.toml` is only logged; tell the user once
   - [ ] the log notes the library every 3 s; a CUDA line on machines without NVIDIA; empty folders left after uninstall
 - [ ] Doc fixes from the blind test: the Welcome page lists web pages on Linux; the README's install folder example nests; pickers need xdg-desktop-portal; `export` takes a path; `prop speed` is for videos; the tarball's `README.txt` lists fewer commands; waywallen-display's MIT text in `licenses/`

@@ -113,6 +113,8 @@ const Known = struct {
     paused_by: [24]u8 = undefined,
     paused_by_len: usize = 0,
     library: []const []const u8 = &.{},
+    /// What each tile says, beside `library` (`labels`).
+    labels: []const []const u8 = &.{},
     library_total: u32 = 0,
     /// The connected monitors, in zmural's order.
     monitors: []const Monitor = &.{},
@@ -360,6 +362,7 @@ fn refreshLibrary() void {
         if (got == 0 or offset >= total) break;
     }
     app.known.library = paths.items;
+    app.known.labels = labels(a, paths.items) catch paths.items;
     app.known.library_total = total;
 }
 
@@ -1060,6 +1063,45 @@ fn pageWallpapers(l: *Layout) void {
 
 /// One wallpaper's thumbnail with its name: click shows it, right-click (or
 /// the Menu key) opens its menu. `name` keeps each page's tiles apart.
+/// A tile's name: the wallpaper's, and when another in the library has the
+/// same one (a zip imported twice, a file in two folders), its folder too,
+/// so the two can be told apart. In `a`, beside `paths`.
+fn labels(a: std.mem.Allocator, paths: []const []const u8) ![]const []const u8 {
+    const media = zmural.media;
+    var count: std.StringHashMapUnmanaged(u32) = .empty;
+    for (paths) |p| (try count.getOrPutValue(a, media.displayName(p), 0)).value_ptr.* += 1;
+    const out = try a.alloc([]const u8, paths.len);
+    for (paths, out) |p, *l| {
+        const name = media.displayName(p);
+        if (count.get(name).? < 2) {
+            l.* = name;
+            continue;
+        }
+        // The folder that holds the file, or holds the package's folder.
+        const own = if (std.mem.eql(u8, name, std.fs.path.basename(p))) p else std.fs.path.dirname(p) orelse p;
+        const folder = std.fs.path.basename(std.fs.path.dirname(own) orelse "");
+        l.* = try std.fmt.allocPrint(a, "{s} · {s}", .{ name, folder });
+    }
+    return out;
+}
+
+test labels {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    const got = try labels(arena.allocator(), &.{
+        "/w/Sunsets/sun.webm",
+        "/w/Sunsets (2)/sun.webm",
+        "/w/rain.mp4",
+        "/w/Neon/zmural.toml",
+        "/v/Neon/zmural.toml",
+    });
+    try std.testing.expectEqualStrings("sun.webm · Sunsets", got[0]);
+    try std.testing.expectEqualStrings("sun.webm · Sunsets (2)", got[1]);
+    try std.testing.expectEqualStrings("rain.mp4", got[2]);
+    try std.testing.expectEqualStrings("Neon · w", got[3]);
+    try std.testing.expectEqualStrings("Neon · v", got[4]);
+}
+
 fn wallpaperTile(comptime name: []const u8, i: usize, r: Rect) void {
     const ui = &app.ui;
     const p = ui.pal;
@@ -1072,7 +1114,8 @@ fn wallpaperTile(comptime name: []const u8, i: usize, r: Rect) void {
     // A dark fade under the name, so it reads on any picture.
     const scrim: Rect = .{ .x = tr.x, .y = tr.y + tr.h * 0.55, .w = tr.w, .h = tr.h * 0.45 };
     ui.gradient(scrim, 6, gui.rgba(0x00000000), gui.rgba(0x000000A6));
-    ui.text(.{ .x = tr.x + 10, .y = tr.bottom() - 30, .w = tr.w - 20, .h = 24 }, zmural.media.displayName(path), .body, .left, gui.rgba(0xFFFFFFFF));
+    const label = if (i < app.known.labels.len) app.known.labels[i] else zmural.media.displayName(path);
+    ui.text(.{ .x = tr.x + 10, .y = tr.bottom() - 30, .w = tr.w - 20, .h = 24 }, label, .body, .left, gui.rgba(0xFFFFFFFF));
     const current = std.ascii.eqlIgnoreCase(path, app.known.wallpaper);
     if (current) {
         ui.stroke(tr.inset(-3, -3), 9, p.accent, 2);
