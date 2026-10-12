@@ -165,7 +165,11 @@ fn line(
     const stamp_len = out.buffered().len;
     // As std.log's default writes it: "info: ...", "warn(tray): ...".
     const prefix = comptime level.asText() ++ (if (scope == .default) "" else "(" ++ @tagName(scope) ++ ")") ++ ": ";
-    out.print(prefix ++ format, args) catch {}; // zsnag:ok — as above
+    var msg_buf: [4096]u8 = undefined;
+    var msg: std.Io.Writer = .fixed(&msg_buf);
+    msg.print(prefix ++ format, args) catch {}; // zsnag:ok — as above
+    // What goes in can be a file's name: one line per message, readable.
+    escape(&out, msg.buffered());
     out.writeByte('\n') catch {
         buf[buf.len - 1] = '\n'; // a truncated line still ends
     };
@@ -178,6 +182,37 @@ fn line(
         writeAll(fd, text);
         if (written.fetchAdd(text.len, .acq_rel) + text.len > limit) rotate();
     }
+}
+
+/// Writes `text` with every control character and every byte that isn't
+/// part of valid UTF-8 as `\xNN`: a newline in a file's name can't start a
+/// line that looks like zmural's own, and the log stays text. Stops quietly
+/// when `out` is full.
+fn escape(out: *std.Io.Writer, text: []const u8) void {
+    var i: usize = 0;
+    while (i < text.len) {
+        const c = text[i];
+        const n = std.unicode.utf8ByteSequenceLength(c) catch 0;
+        const valid = n > 1 and i + n <= text.len and std.unicode.utf8ValidateSlice(text[i .. i + n]);
+        if (valid) {
+            out.writeAll(text[i .. i + n]) catch return;
+            i += n;
+        } else if (n == 1 and c >= 0x20 and c != 0x7f) {
+            out.writeByte(c) catch return;
+            i += 1;
+        } else {
+            out.print("\\x{x:0>2}", .{c}) catch return;
+            i += 1;
+        }
+    }
+}
+
+test "control characters and broken UTF-8 can't make a line of their own" {
+    var buf: [256]u8 = undefined;
+    var out: std.Io.Writer = .fixed(&buf);
+    escape(&out, "x\n2026-10-12 14:30:00.000 error(daemon): forged.png\tcafé \xff\x1b[31m");
+    try std.testing.expectEqualStrings("x\\x0a2026-10-12 14:30:00.000 error(daemon): forged.png\\x09café \\xff\\x1b[31m", out.buffered());
+    try std.testing.expect(std.mem.findScalar(u8, out.buffered(), '\n') == null);
 }
 
 test "a timestamp is local time with milliseconds" {

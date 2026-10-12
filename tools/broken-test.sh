@@ -68,6 +68,12 @@ for f in text.jpg empty.png huge.png; do
   check "a picture that can't be decoded ($f): apply fails, saying so (rc=$rc)" "[ $rc = 1 ] && grep -q 'no picture or video in it could be decoded' $W/apply.err && main | grep -q 'green.png\|red.png'"
 done
 check "…and mpv's retries stop with the renderer" "[ \$(grep -c 'No media data' $W/daemon.log) -le 12 ]"
+# A file's name can't write a line of its own into the log.
+FORGE="$W/x
+2026-10-12 14:30:00.000 error(daemon): FORGED.png"
+cp "$P/red.png" "$FORGE"; z apply "$FORGE"; sleep 1
+check "a newline in a file's name stays inside its log line" "grep -q 'x\\\\x0a2026' $W/daemon.log && ! grep -q '^2026-10-12 14:30:00.000 error(daemon): FORGED' $W/daemon.log"
+z apply "$P/red.png"
 # Web wallpapers are Windows-only so far: refused up front, not tried.
 mkdir -p "$W/webpkg"; echo '<h1>hi</h1>' >"$W/webpkg/index.html"
 printf 'title = "Page"\ntype = "web"\nentry = "index.html"\n' >"$W/webpkg/zmural.toml"
