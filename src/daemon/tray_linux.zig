@@ -94,7 +94,11 @@ pub const Tray = struct {
         const is = std.mem.eql;
         if (is(u8, m.path, item_path)) {
             if (is(u8, m.interface, props_iface)) return t.properties(c, m, s, .item);
-            if (is(u8, m.member, "Activate") or is(u8, m.member, "SecondaryActivate")) {
+            // ContextMenu: a host that can't show our menu (swaybar) asks
+            // us to; the settings window has the menu's controls, so it
+            // opens that (owner, 2026-10-12). Hosts that show the menu
+            // themselves (Plasma, GNOME's AppIndicator, Waybar) never call it.
+            if (is(u8, m.member, "Activate") or is(u8, m.member, "SecondaryActivate") or is(u8, m.member, "ContextMenu")) {
                 c.reply(m, "", "") catch {}; // zsnag:ok — the host doesn't wait for this
                 return .open_settings;
             }
@@ -107,7 +111,7 @@ pub const Tray = struct {
                 return null;
             }
             if (is(u8, m.member, "Introspect")) return introspect(c, m, item_xml);
-            c.reply(m, "", "") catch {}; // zsnag:ok — ContextMenu, Scroll: nothing to do
+            c.reply(m, "", "") catch {}; // zsnag:ok — Scroll: nothing to do
             return null;
         }
         if (is(u8, m.path, menu_path)) {

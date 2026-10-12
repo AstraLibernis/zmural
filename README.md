@@ -98,7 +98,7 @@ Until you pick a wallpaper or change a setting, zmural saves no settings, so the
 
 ## Everyday use
 
-**The tray icon:** click it to open the settings window. Right-click it for the quick menu: pause, mute, next, previous, shuffle, rescan the library, start at login, and quit.
+**The tray icon:** click it to open the settings window. Right-click it for the quick menu: pause, mute, next, previous, shuffle, rescan the library, start at login, and quit. (Sway's bar can't show an app's menu, so there a right click opens the settings window too; its player card has pause, mute, next and previous.)
 
 **The settings window** has your wallpapers as thumbnails (click one to show it, right-click for more, including which monitor), plus pages for playback, pausing rules and general settings. Its **Customise** section adjusts the wallpaper that's showing. It works by keyboard too: Tab moves between areas, the arrow keys move within one, Enter or Space presses, and Escape closes the window. You can also open it from the app menu, or with `zmural --settings`.
 

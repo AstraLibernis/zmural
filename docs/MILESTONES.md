@@ -31,10 +31,10 @@ From the blind test of 0.1.0 ([notes/blind-test-2026-10-12.md](../notes/blind-te
 and the controls inventory ([CONTROLS.md](CONTROLS.md)), which found controls no test had pressed.
 
 - [x] Zip bombs refused by ratio, and a zip capped at 4 GiB (fd39888)
-- [ ] **Tray menu on hosts that call `ContextMenu`** (swaybar): show the menu there, and do something sensible with middle click and scroll
+- [x] **Tray right-click on swaybar** (it calls `ContextMenu` and can't show the menu): opens the settings window (owner's choice, 2026-10-12). `tools/tray-test.sh` clicks swaybar's real icon, left and right, with a virtual pointer; the right-click step fails with the old no-op. Plasma's tray unchanged (`kde-test`, 20 of 20)
 - [ ] **Open folder, Open log, Show in folder:** say so when nothing could open it (Linux: `xdg-open`'s exit status; Windows: `ShellExecuteW`'s result)
 - [ ] **Uninstall from the window:** no lone "Yes", show that it's working, no ~4 s wait
-- [ ] **A test desktop like a user's:** a Sway rig with a session bus, swaybar's tray, a notification daemon, and real pointer input; it right-clicks the real tray icon
+- [ ] **A test desktop like a user's:** a Sway rig with a session bus, swaybar's tray, a notification daemon, and real pointer input (`tray-test.sh` and `soak-test.sh` have them; the settings-window rigs don't yet)
 - [ ] **Every settings-window control pressed with real input, its effect checked, toasts included:** every row of [CONTROLS.md](CONTROLS.md) gets an `R:` on Linux
 - [ ] **A Windows pass:** the same list, by hand, on a real Windows 11 desktop, recorded in `notes/` (the window hasn't been looked at on Windows since it moved into zmural)
 - [ ] Small bugs from the blind test:
