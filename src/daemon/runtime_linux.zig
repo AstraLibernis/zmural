@@ -136,7 +136,9 @@ pub const Options = struct {
     starter_dir: ?[]const u8 = null,
 };
 
-const max_control_clients = 8;
+/// Clients served at once (each `apply` stays until its wallpaper shows);
+/// one more is turned away, and its client tries again (`control_client_linux`).
+const max_control_clients = 32;
 
 const Runtime = struct {
     gpa: std.mem.Allocator,

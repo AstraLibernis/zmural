@@ -132,6 +132,18 @@ LOG=a10.log; A=$(HOME=$H start --apply test-pattern); wait_sock
 check "renamed Videos and Pictures folders are scanned" "grep -q \"always scanning $H/Vidéos/Wallpapers and $H/Bilder/Wallpapers\" $T/a10.log && $B/zmural-console status | grep -q 'library   : 3 wallpapers'"
 pkill -f "^$B/zmural( |\$)" 2>/dev/null; sleep 0.5; rm -f $R/zmural/*.sock $T/xdgcfg/user-dirs.dirs
 
+# 10b. Many commands at once: zmural serves 32 together and the rest wait
+#      their turn, none is dropped with a bare "Disconnected".
+LOG=a10b.log; A=$(start --apply test-pattern); wait_sock
+rm -f $T/par.*
+for i in $(seq 1 60); do
+  ( case $((i % 3)) in 0) $B/zmural-console status ;; 1) $B/zmural-console pause ;; 2) $B/zmural-console play ;; esac >/dev/null 2>$T/par.$i; echo $? >$T/par.rc.$i ) &
+done
+wait
+ok=$(cat $T/par.rc.* | grep -c '^0$')
+check "60 commands at once: every one taken ($ok of 60)" "[ $ok = 60 ] && ! cat $T/par.[0-9]* | grep -q ."
+pkill -f "^$B/zmural( |\$)" 2>/dev/null; sleep 0.5; rm -f $R/zmural/*.sock
+
 # 11. The same refusal, with the render nodes hidden.
 command -v bwrap >/dev/null && norender bwrap --dev-bind / / --tmpfs /dev/dri
 

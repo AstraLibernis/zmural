@@ -205,7 +205,12 @@ pub fn main(init: std.process.Init) !void {
     };
     defer c.close(init.gpa);
 
-    if (!try report(arena, out, try c.request(req)) or !waitShown(c, req)) {
+    const reply = c.request(req) catch |err| {
+        std.log.err("zmural-console: zmural stopped answering ({s}); try again", .{@errorName(err)});
+        c.close(init.gpa);
+        std.process.exit(1);
+    };
+    if (!try report(arena, out, reply) or !waitShown(c, req)) {
         // Closed by hand: exit skips the deferred close.
         c.close(init.gpa);
         std.process.exit(1);
@@ -238,10 +243,19 @@ fn runLinux(init: std.process.Init, out: *std.Io.Writer, request: Request) !void
             std.log.err("zmural-console: the process on zmural's socket belongs to another user; refusing to talk to it", .{});
             std.process.exit(1);
         },
-        else => return err,
+        else => {
+            // Turned away for 3 s (zmural serving many commands at once), or gone.
+            std.log.err("zmural-console: zmural didn't take the command ({s}); try again", .{@errorName(err)});
+            std.process.exit(1);
+        },
     };
     defer c.close(init.gpa);
-    if (!try report(arena, out, try c.request(req)) or !waitShown(c, req)) {
+    const reply = c.request(req) catch |err| {
+        std.log.err("zmural-console: zmural stopped answering ({s}); try again", .{@errorName(err)});
+        c.close(init.gpa);
+        std.process.exit(1);
+    };
+    if (!try report(arena, out, reply) or !waitShown(c, req)) {
         // Closed by hand: exit skips the deferred close.
         c.close(init.gpa);
         std.process.exit(1);

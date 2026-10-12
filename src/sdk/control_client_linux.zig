@@ -46,7 +46,24 @@ pub const Client = struct {
 
     /// Connects and says hello. Replies must come within `timeout_ms`
     /// (`error.Timeout` otherwise: the daemon is stuck).
+    /// Connects and says hello. zmural turns a connection away when it is
+    /// serving as many as it takes; that is tried again for a while.
     pub fn connect(gpa: std.mem.Allocator, path: []const u8, client: []const u8, timeout_ms: u32) Error!*Client {
+        var tries: u32 = 0;
+        while (true) : (tries += 1) {
+            return connectOnce(gpa, path, client, timeout_ms) catch |err| {
+                if (err != error.Disconnected or tries >= busy_tries) return err;
+                const ts: linux.timespec = .{ .sec = 0, .nsec = busy_wait_ms * std.time.ns_per_ms };
+                _ = linux.nanosleep(&ts, null);
+                continue;
+            };
+        }
+    }
+
+    const busy_tries = 30;
+    const busy_wait_ms = 100;
+
+    fn connectOnce(gpa: std.mem.Allocator, path: []const u8, client: []const u8, timeout_ms: u32) Error!*Client {
         const c = try gpa.create(Client);
         errdefer gpa.destroy(c);
         c.conn = unix.connect(path) catch |err| return switch (err) {
