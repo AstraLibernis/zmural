@@ -1377,6 +1377,11 @@ fn stampOf(store: SettingsStore) ?FileStamp {
 /// doesn't overwrite them.
 fn checkFile() void {
     const store = if (rt.store) |*s| s else return;
+    var buf: [600]u8 = undefined;
+    if (store.unreadableNotice(&buf)) |n| if (rt.tray) |*t| if (t.shown) {
+        t.balloon(n.title, n.body);
+        store.told = true;
+    };
     const stamp = stampOf(store.*) orelse return; // deleted: the next save recreates it
     if (rt.file_stamp) |old| if (std.meta.eql(old, stamp)) return;
     rt.file_stamp = stamp;

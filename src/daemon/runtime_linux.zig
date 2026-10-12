@@ -416,6 +416,10 @@ fn stampOf(store: *const SettingsStore) ?FileStamp {
 /// doesn't overwrite them (as `runtime_windows.zig` does).
 fn checkFile() void {
     const store = rt.opts.store orelse return;
+    var buf: [600]u8 = undefined;
+    if (store.unreadableNotice(&buf)) |n| {
+        if (desktop.shown(if (rt.bus) |*b| b else null, n.title, n.body)) store.told = true;
+    }
     const stamp = stampOf(store) orelse return; // deleted: the next save recreates it
     if (rt.file_stamp) |old| if (std.meta.eql(old, stamp)) return;
     rt.file_stamp = stamp;

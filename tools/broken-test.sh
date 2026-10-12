@@ -77,6 +77,19 @@ up --apply "$W/fake.mp4"; sleep 2
 check "a broken file with nothing played yet: zmural's own wallpaper" "main | grep -q 'share/zmural/wallpapers/Prism.webm'"
 check "…said in the notice" "grep \"can't show fake.mp4\" $W/notify.log | tail -1 | grep -q 'Showing Prism.webm instead'"
 check "zmural kept running, nothing crashed" "kill -0 $ZD && ! grep -qi 'panic\|segmentation' $W/daemon.log"
+
+# 4. A hand edit settings.toml can't use: the user is told once, with the
+#    line, and the file is left alone; told again only after it read fine.
+bad() { grep -c "zmural can't use settings.toml" "$W/notify.log"; }
+cp "$F" "$W/good.toml"
+sed -i 's/^volume = .*/volume = "loud"/' "$F"; sleep 3
+L=$(grep -n '^volume' "$F" | cut -d: -f1)
+check "a value it can't use in settings.toml: the user is told, with the line" "[ \$(bad) = 1 ] && grep \"zmural can't use settings.toml\" $W/notify.log | grep -q 'line $L has a value'"
+echo "# still bad" >>"$F"; sleep 3
+check "…once, not at every edit while it stays bad" "[ \$(bad) = 1 ] && grep -q 'volume = \"loud\"' $F"
+cp "$W/good.toml" "$F"; sleep 3; sed -i 's/^volume = .*/volume = "loud"/' "$F"; sleep 3
+check "…and again once it read fine and broke again" "[ \$(bad) = 2 ]"
+cp "$W/good.toml" "$F"; sleep 3
 z quit; sleep 1
 
 kill $SWAY $NOTIFY 2>/dev/null; kill "$(cat "$W/session.pid")" 2>/dev/null

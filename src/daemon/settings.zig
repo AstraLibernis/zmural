@@ -289,6 +289,12 @@ pub const Store = struct {
     path: []const u8,
     /// The file exists but didn't parse: keep it, never overwrite it.
     read_only: bool = false,
+    /// Why it didn't, for the user ("line 7 has a value zmural can't use").
+    why_buf: [96]u8 = undefined,
+    why_len: usize = 0,
+    /// The user was told it doesn't read (`tellUnreadable`); again only after
+    /// it has read fine in between.
+    told: bool = false,
     /// `load` found no file: zmural's first run (nothing was ever changed).
     fresh: bool = false,
 
@@ -317,15 +323,37 @@ pub const Store = struct {
             } else {
                 std.log.warn("settings: cannot read {s} ({s}); using defaults and leaving it alone", .{ store.path, @errorName(err) });
                 store.read_only = true;
+                store.setWhy("it can't be read ({s})", .{@errorName(err)});
             }
             return .{};
         };
         var diag: toml.Diagnostic = .{};
-        return parse(arena, text, &diag) catch |err| {
+        const s = parse(arena, text, &diag) catch |err| {
             std.log.warn("settings: {s} line {d}: {s}; using defaults and leaving the file alone", .{ store.path, diag.line, @errorName(err) });
             store.read_only = true;
+            switch (err) {
+                error.BadValue => store.setWhy("line {d} has a value zmural can't use", .{diag.line}),
+                error.SyntaxError => store.setWhy("line {d} isn't written the way the file's format needs", .{diag.line}),
+                error.OutOfMemory => store.setWhy("it is too large", .{}),
+                else => store.setWhy("line {d} has a value zmural doesn't know ({s})", .{ diag.line, @errorName(err) }),
+            }
             return .{};
         };
+        store.told = false;
+        return s;
+    }
+
+    fn setWhy(store: *Store, comptime fmt: []const u8, args: anytype) void {
+        store.why_len = if (std.fmt.bufPrint(&store.why_buf, fmt, args)) |w| w.len else |_| 0;
+    }
+
+    /// What to tell the user once when the file doesn't read; null when it
+    /// reads, or they were told. `title`, `body` live in `buf`.
+    pub fn unreadableNotice(store: *Store, buf: []u8) ?struct { title: []const u8, body: []const u8 } {
+        if (!store.read_only or store.told) return null;
+        const title = "zmural can't use settings.toml";
+        const body = std.fmt.bufPrint(buf, "{s}: {s}. zmural keeps its current settings and won't change the file until it reads again.", .{ store.path, store.why_buf[0..store.why_len] }) catch return null;
+        return .{ .title = title, .body = body };
     }
 
     /// Writes atomically (temp file, then rename).
