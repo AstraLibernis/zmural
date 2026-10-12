@@ -64,9 +64,11 @@ pub const Tray = struct {
         if (t.shown) _ = w.Shell_NotifyIconW(w.NIM_MODIFY, &t.data);
     }
 
-    /// A balloon (a notification, on Windows 10 and 11) from the icon.
+    /// A balloon (a notification, on Windows 10 and 11) from the icon. Its
+    /// text goes in the log too: Do Not Disturb drops balloons unseen.
     pub fn balloon(t: *Tray, title: []const u8, text: []const u8) void {
         if (!t.shown) return;
+        std.log.info("notice: {s}: {s}", .{ title, text });
         var d = t.data;
         d.uFlags = w.NIF_INFO;
         writeUtf16(&d.szInfoTitle, title);

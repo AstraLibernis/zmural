@@ -342,7 +342,6 @@ pub const Store = struct {
         };
         var diag: toml.Diagnostic = .{};
         const s = parse(arena, text, &diag) catch |err| {
-            std.log.warn("settings: {s} line {d}: {s}; using defaults and leaving the file alone", .{ store.path, diag.line, @errorName(err) });
             store.read_only = true;
             switch (err) {
                 error.BadValue => store.setWhy("line {d} has a value zmural can't use", .{diag.line}),
@@ -350,6 +349,9 @@ pub const Store = struct {
                 error.OutOfMemory => store.setWhy("it is too large", .{}),
                 else => store.setWhy("line {d} has a value zmural doesn't know ({s})", .{ diag.line, @errorName(err) }),
             }
+            // Only a file bad from the start means defaults; a hand edit
+            // while running keeps what is in use.
+            std.log.warn("settings: {s}: {s}; {s} and leaving the file alone", .{ store.path, store.why_buf[0..store.why_len], if (at_start) "using defaults" else "keeping the current settings" });
             return .{};
         };
         store.told_len = null;

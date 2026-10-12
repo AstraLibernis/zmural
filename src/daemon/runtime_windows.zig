@@ -599,9 +599,10 @@ fn goBackFromBroken() void {
         std.fmt.bufPrint(&body, "{s}. Pick another wallpaper.", .{said})) catch "It can't be played. Pick another wallpaper.";
     var title_buf: [300]u8 = undefined;
     const title = std.fmt.bufPrint(&title_buf, "zmural can't show {s}", .{zmural.media.displayName(broken)}) catch "zmural can't show this wallpaper";
-    std.log.info("{s}: {s}", .{ title, text });
     // The same file again (applied twice, or by rotation): logged, not stacked.
-    if (rt.fallback.firstTime(rt.gpa, broken, main)) if (rt.tray) |*t| t.balloon(title, text);
+    // A balloon logs its own text.
+    const told = rt.fallback.firstTime(rt.gpa, broken, main) and rt.tray != null and rt.tray.?.shown;
+    if (told) rt.tray.?.balloon(title, text) else std.log.info("{s}: {s}", .{ title, text });
 }
 
 /// Shows what to go back to instead of `broken` and returns it (valid until
