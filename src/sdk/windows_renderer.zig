@@ -321,6 +321,8 @@ fn drainEvents(s: *Surface) void {
                 if (ef.reason == mpv.end_reason.eof)
                     fail("cannot show '{s}': there is no picture or video in it that can be shown", .{st.path});
             },
+            mpv.event.video_reconfig => if (mpv.tooLarge(api, h)) |sz|
+                fail("cannot show '{s}': at {d}x{d} it is larger than a wallpaper can be (50 megapixels at most)", .{ st.path, sz[0], sz[1] }),
             mpv.event.shutdown => return,
             else => {},
         }

@@ -41,6 +41,7 @@ pub const event = struct {
     pub const log_message: c_int = 2;
     pub const end_file: c_int = 7;
     pub const file_loaded: c_int = 8;
+    pub const video_reconfig: c_int = 17;
     pub const playback_restart: c_int = 21;
 };
 
@@ -160,3 +161,19 @@ pub const RenderApi = struct {
     report_swap: *const fn (*RenderContext) callconv(.c) void,
     free: *const fn (*RenderContext) callconv(.c) void,
 };
+
+/// The most pixels a wallpaper's frame may have: 50 megapixels, about one and
+/// a half 8K frames. A tiny file can claim a huge canvas (a 46 KB GIF of
+/// 10000x10000 took 2.1 GB to play), and nothing that large is a wallpaper.
+pub const max_pixels: u64 = 50_000_000;
+
+/// The video's size once mpv knows it, if it is more than `max_pixels`.
+pub fn tooLarge(api: *const Api, h: *Handle) ?[2]u64 {
+    var size: [2]u64 = undefined;
+    for ([_][*:0]const u8{ "width", "height" }, &size) |name, *v| {
+        const raw = api.get_property_string(h, name) orelse return null;
+        defer api.free(raw);
+        v.* = std.fmt.parseUnsigned(u64, std.mem.span(raw), 10) catch return null;
+    }
+    return if (size[0] *| size[1] > max_pixels) size else null;
+}

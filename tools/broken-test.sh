@@ -67,6 +67,10 @@ for f in text.jpg empty.png huge.png; do
   z apply "$W/$f" 2>"$W/apply.err"; rc=$?; sleep 1
   check "a picture that can't be decoded ($f): apply fails, saying so (rc=$rc)" "[ $rc = 1 ] && grep -q 'no picture or video in it could be decoded' $W/apply.err && main | grep -q 'green.png\|red.png'"
 done
+# A tiny file with a huge canvas: refused once its size is known.
+magick -size 10000x10000 xc:white -colors 2 "$W/canvas.gif"
+z apply "$W/canvas.gif" 2>"$W/apply.err"; rc=$?; sleep 1
+check "a GIF with a 10000x10000 canvas: refused as larger than a wallpaper can be (rc=$rc)" "[ $rc = 1 ] && grep -q '10000x10000 it is larger' $W/apply.err"
 check "…and mpv's retries stop with the renderer" "[ \$(grep -c 'No media data' $W/daemon.log) -le 12 ]"
 # A file's name can't write a line of its own into the log.
 FORGE="$W/x

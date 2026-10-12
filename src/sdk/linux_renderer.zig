@@ -532,6 +532,8 @@ fn drainMpvEvents() void {
                     fail("cannot show '{s}': there is no picture or video in it that can be shown", .{st.path});
             },
             mpv.event.playback_restart => reportDecoder(api, h),
+            mpv.event.video_reconfig => if (mpv.tooLarge(api, h)) |sz|
+                fail("cannot show '{s}': at {d}x{d} it is larger than a wallpaper can be (50 megapixels at most)", .{ st.path, sz[0], sz[1] }),
             mpv.event.shutdown => return,
             else => {},
         }
