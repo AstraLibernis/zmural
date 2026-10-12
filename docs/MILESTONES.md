@@ -60,9 +60,8 @@ Stability and the loose ends of what exists, before anything new.
 - [ ] A week of daily use on both OSes (sleep and resume, monitor hotplug), with a soak test for the parts a rig can run
 - [ ] Two real monitors on Windows, once someone has them
 
-## 0.3: Library and monitors
+## 0.3: Monitors
 
-- [ ] Search and tags in the library
 - [ ] A view of what each monitor shows, in the window (today only `zmural-console status` says)
 - [ ] Properties per monitor (a monitor's own wallpaper has none, and one wallpaper on two monitors shares one set)
 - [ ] Rotation per monitor; pausing one monitor (`pause --monitor` is refused)
@@ -99,6 +98,7 @@ signed.
 - Transitions between wallpapers; blur while paused
 - Screensaver mode (Windows `.scr`; Linux not designed)
 - Languages other than English
+- A name filter for the library, if libraries grow past what thumbnails show at a glance (tags: decided against, below)
 - Niri: `covered` and fullscreen on hidden workspaces, once its IPC says where windows are (upstream)
 
 ## Decided against
@@ -107,7 +107,7 @@ Settled, so they aren't proposed again: an online gallery (zmural is not a servi
 (unzip is enough; zmural has an uninstaller); plugins, third-party renderers or programs as
 wallpapers; web addresses as wallpapers or any network for a wallpaper; screen-reader support
 in the settings window (`zmural-console` does everything it does); restarting itself after a
-crash; choosing or combining GPUs (zmural stays on the desktop's own); Windows 10.
+crash; tags for wallpapers (a library is the user's own folders, which thumbnails show; tags are for big catalogues like waywallen's Wallhaven and Workshop sources, which zmural doesn't have); choosing or combining GPUs (zmural stays on the desktop's own); Windows 10.
 
 ## Known security issues
 

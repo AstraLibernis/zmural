@@ -35,7 +35,7 @@ Working today on both Windows and Linux:
 
 **Windows only, so far:** web-page wallpapers (an HTML page saved on your computer; always offline).
 
-**Coming next:** fixes from the first public test (0.1.1), then search and tags in the library, then web wallpapers on Linux. [docs/MILESTONES.md](docs/MILESTONES.md) has the plan.
+**Coming next:** fixes from the first public test (0.1.1), then a view of every monitor in the settings window, then web wallpapers on Linux. [docs/MILESTONES.md](docs/MILESTONES.md) has the plan.
 
 ## What you need
 

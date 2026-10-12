@@ -100,7 +100,7 @@ The goal is one canonical ID everywhere: a hash of the EDID manufacturer, produc
 - **UI:** the settings window, one immediate-mode UI shared by both OSes with no UI framework. The pages and widgets are common code; only the drawing backend and the window differ: Direct2D and DirectWrite over the Mica backdrop on Windows, Cairo and Pango in a plain Wayland (xdg-shell) window on Linux. It holds no state of its own and talks to zmural over the control protocol, from a thread of its own inside zmural's process. That is deliberate: if the window breaks, zmural stops with it and you see it, instead of settings quietly not working. The tray icon opens it, and so does `zmural --settings`. It works by keyboard too: Tab moves between the sidebar, the player card and the page, the arrows move in the direction pressed, Enter or Space presses, the Menu key opens a wallpaper's menu, and Escape closes the window.
 
 ## Roadmap
-The plan, release by release, is in [MILESTONES.md](MILESTONES.md): 0.1.1 makes every control work and be tested with real input; 0.2 is stability on both OSes; 0.3 the library and monitors; 0.4 web wallpapers on Linux and wallpapers that react; 0.5 the renderer sandbox, signed releases and Linux packages; then 1.0. There will be no online gallery: zmural imports wallpapers you download yourself.
+The plan, release by release, is in [MILESTONES.md](MILESTONES.md): 0.1.1 makes every control work and be tested with real input; 0.2 is stability on both OSes; 0.3 monitors; 0.4 web wallpapers on Linux and wallpapers that react; 0.5 the renderer sandbox, signed releases and Linux packages; then 1.0. There will be no online gallery: zmural imports wallpapers you download yourself.
 
 ## Project layout
 ```
@@ -142,7 +142,6 @@ This is the goal, not what works today; [MILESTONES.md](MILESTONES.md) has the c
 **Library**
 - Drag-and-drop a file or folder, or import a wallpaper package (`.zip`).
 - Auto-detects `Videos/Wallpapers` and `Pictures/Wallpapers`.
-- Search and tags.
 - **Imports Lively wallpaper packages** (reads their `LivelyInfo.json` metadata format).
 
 **Playlists**
