@@ -300,6 +300,11 @@ pub const Store = struct {
     /// (not on settings it had before).
     bad_at_start: bool = false,
     loads: u32 = 0,
+    /// The last save failed, and why (`saveNotice`); a save that works clears it.
+    save_why_buf: [96]u8 = undefined,
+    save_why_len: usize = 0,
+    save_failing: bool = false,
+    save_told: bool = false,
     /// `load` found no file: zmural's first run (nothing was ever changed).
     fresh: bool = false,
 
@@ -374,18 +379,58 @@ pub const Store = struct {
         store.told_len = store.why_len;
     }
 
-    /// Writes atomically (temp file, then rename).
-    pub fn save(store: *const Store, gpa: std.mem.Allocator, s: *const Settings) void {
+    /// Writes atomically (temp file, then rename). A file the user made
+    /// read-only is left alone; a link (a dotfile manager's) is written
+    /// through, so the file it points at changes and the link stays.
+    pub fn save(store: *Store, gpa: std.mem.Allocator, s: *const Settings) void {
         if (store.read_only) return;
         var out: std.Io.Writer.Allocating = .init(gpa);
         defer out.deinit();
         write(&out.writer, s) catch return;
-        const tmp = std.fmt.allocPrint(gpa, "{s}.tmp", .{store.path}) catch return;
-        defer gpa.free(tmp);
         const cwd = std.Io.Dir.cwd();
-        cwd.createDirPath(store.io, store.dir) catch |err| return warnSave(store, err);
-        cwd.writeFile(store.io, .{ .sub_path = tmp, .data = out.written() }) catch |err| return warnSave(store, err);
-        cwd.rename(tmp, cwd, store.path, store.io) catch |err| return warnSave(store, err);
+        cwd.createDirPath(store.io, store.dir) catch |err| return store.saveFailed(err);
+        cwd.access(store.io, store.path, .{ .write = true }) catch |err| switch (err) {
+            error.FileNotFound => {},
+            else => return store.saveFailed(error.ReadOnlyFile),
+        };
+        var link_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+        const link: ?[]const u8 = if (cwd.readLink(store.io, store.path, &link_buf)) |n| link_buf[0..n] else |_| null;
+        const target = if (link) |l|
+            (if (std.fs.path.isAbsolute(l)) gpa.dupe(u8, l) else std.fs.path.join(gpa, &.{ store.dir, l })) catch return
+        else
+            gpa.dupe(u8, store.path) catch return;
+        defer gpa.free(target);
+        const tmp = std.fmt.allocPrint(gpa, "{s}.tmp", .{target}) catch return;
+        defer gpa.free(tmp);
+        cwd.writeFile(store.io, .{ .sub_path = tmp, .data = out.written() }) catch |err| return store.saveFailed(err);
+        cwd.rename(tmp, cwd, target, store.io) catch |err| {
+            cwd.deleteFile(store.io, tmp) catch {}; // zsnag:ok — best effort; it is only the temp copy
+            return store.saveFailed(err);
+        };
+        store.save_failing = false;
+        store.save_told = false;
+    }
+
+    fn saveFailed(store: *Store, err: anyerror) void {
+        std.log.warn("settings: cannot save {s}: {s}", .{ store.path, @errorName(err) });
+        const why: []const u8 = switch (err) {
+            error.ReadOnlyFile => "the file is read-only",
+            error.AccessDenied, error.PermissionDenied => "permission denied",
+            error.NoSpaceLeft => "the disk is full",
+            error.ReadOnlyFileSystem => "the disk is read-only",
+            else => @errorName(err),
+        };
+        store.save_why_len = @min(why.len, store.save_why_buf.len);
+        @memcpy(store.save_why_buf[0..store.save_why_len], why[0..store.save_why_len]);
+        store.save_failing = true;
+    }
+
+    /// What to tell the user once when settings can't be saved; null when
+    /// they can, or the user was told. Mark it with `save_told`.
+    pub fn saveNotice(store: *const Store, buf: []u8) ?struct { title: []const u8, body: []const u8 } {
+        if (!store.save_failing or store.save_told) return null;
+        const body = std.fmt.bufPrint(buf, "{s}: {s}. Changes last until zmural quits.", .{ store.path, store.save_why_buf[0..store.save_why_len] }) catch return null;
+        return .{ .title = "zmural can't save its settings", .body = body };
     }
 };
 
@@ -398,10 +443,6 @@ pub fn isExposed(c: policy.Condition) bool {
 fn exposedRule(key: []const u8) ?policy.Condition {
     for (pause_rules) |r| if (eql(key, @tagName(r[0]))) return r[0];
     return null;
-}
-
-fn warnSave(store: *const Store, err: anyerror) void {
-    std.log.warn("settings: cannot save {s}: {s}", .{ store.path, @errorName(err) });
 }
 
 fn eql(a: []const u8, b: []const u8) bool {

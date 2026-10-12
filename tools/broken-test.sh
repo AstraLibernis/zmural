@@ -126,6 +126,16 @@ check "…saying zmural keeps its current settings" "grep \"zmural can't use set
 z quit; sleep 1; up
 check "a bad settings.toml at start: told zmural uses its defaults" "[ \$(bad) = 4 ] && grep \"zmural can't use settings.toml\" $W/notify.log | tail -1 | grep -q 'uses its defaults for now'"
 cp "$W/good.toml" "$F"; sleep 3
+# Settings that can't be saved: the user is told, once, and the file is
+# left as the user made it.
+nosave() { grep -c "zmural can't save its settings" "$W/notify.log"; }
+chmod 444 "$F"; z fill fit; z fill center; sleep 3
+check "a read-only settings.toml: left alone, and the user is told once ($(nosave))" "[ \$(nosave) = 1 ] && grep \"can't save its settings\" $W/notify.log | grep -q 'read-only' && [ \$(stat -c %a $F) = 444 ] && ! grep -q '^fill = \"center\"' $F"
+chmod 644 "$F"; z fill crop; sleep 1
+check "…saved again once it's writable" "grep -q '^fill = \"crop\"' $F"
+mv "$F" "$W/cfg/real.toml"; ln -s real.toml "$F"; z fill stretch; sleep 1
+check "a settings.toml that is a link: written through, the link kept" "[ -L $F ] && grep -q '^fill = \"stretch\"' $W/cfg/real.toml"
+rm "$F"; mv "$W/cfg/real.toml" "$F"
 z quit; sleep 1
 
 kill $SWAY $NOTIFY 2>/dev/null; kill "$(cat "$W/session.pid")" 2>/dev/null

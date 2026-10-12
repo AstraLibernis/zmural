@@ -1221,13 +1221,13 @@ fn toggleAutostart() void {
 
 /// Persists the settings, with whatever is showing now as the startup wallpaper.
 fn save() void {
-    const store = rt.store orelse return;
+    const store = if (rt.store) |*st| st else return;
     var s = persistent(rt.settings, rt.wallpaper, rt.startup_wallpaper, rt.paused_on_disk);
     var view: [per_monitor.max]@import("settings.zig").MonitorWallpaper = undefined;
     s.monitor_wallpapers = rt.own.view(&view);
     s.monitor_fills = rt.fills.view();
     store.save(rt.gpa, &s);
-    rt.file_stamp = stampOf(store);
+    rt.file_stamp = stampOf(store.*);
 }
 
 /// What goes into settings.toml: the live settings, minus what only holds for
@@ -1386,6 +1386,10 @@ fn checkFile() void {
     if (store.unreadableNotice(&buf)) |n| if (rt.tray) |*t| if (t.shown) {
         t.balloon(n.title, n.body);
         store.markTold();
+    };
+    if (store.saveNotice(&buf)) |n| if (rt.tray) |*t| if (t.shown) {
+        t.balloon(n.title, n.body);
+        store.save_told = true;
     };
     const stamp = stampOf(store.*) orelse return; // deleted: the next save recreates it
     if (rt.file_stamp) |old| if (std.meta.eql(old, stamp)) return;

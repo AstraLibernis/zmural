@@ -425,6 +425,9 @@ fn checkFile() void {
     if (store.unreadableNotice(&buf)) |n| {
         if (desktop.shown(if (rt.bus) |*b| b else null, n.title, n.body)) store.markTold();
     }
+    if (store.saveNotice(&buf)) |n| {
+        if (desktop.shown(if (rt.bus) |*b| b else null, n.title, n.body)) store.save_told = true;
+    }
     const stamp = stampOf(store) orelse return; // deleted: the next save recreates it
     if (rt.file_stamp) |old| if (std.meta.eql(old, stamp)) return;
     rt.file_stamp = stamp;
