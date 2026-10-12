@@ -493,6 +493,11 @@ fn renderMpvIfDue() void {
     }
 }
 
+/// What mpv says, again and again, about a file with nothing it can decode.
+const no_media = "No media data to loop";
+/// Said once: the daemon replaces this renderer.
+var no_media_told = false;
+
 fn drainMpvEvents() void {
     const api = if (st.api) |*a| a else return;
     const h = st.player orelse return;
@@ -505,6 +510,13 @@ fn drainMpvEvents() void {
                 // mpv also tries its KMS-overlay path once we name a render node,
                 // and says it has no display to drive. It never will: not news.
                 if (std.mem.endsWith(u8, std.mem.span(m.prefix), "drmprime-overlay")) continue;
+                // A file mpv opened but couldn't decode a single frame from
+                // (an empty or damaged picture, one too large to decode): it
+                // says this, and retries forever, instead of ending the file.
+                if (!no_media_told and std.mem.startsWith(u8, std.mem.span(m.text), no_media)) {
+                    no_media_told = true;
+                    fail("cannot show '{s}': no picture or video in it could be decoded", .{st.path});
+                }
                 const level: proto.LogLevel = if (std.mem.eql(u8, std.mem.span(m.level), "warn")) .warn else .err;
                 log(level, "mpv {s}: {s}", .{ std.mem.span(m.prefix), std.mem.trimEnd(u8, std.mem.span(m.text), "\r\n") });
             },
@@ -512,6 +524,12 @@ fn drainMpvEvents() void {
                 const ef: *const mpv.EndFile = @ptrCast(@alignCast(e.data orelse continue)); // zsnag:ok — mpv documents the payload type
                 if (ef.reason == mpv.end_reason.@"error")
                     fail("cannot play '{s}': {s}", .{ st.path, std.mem.span(api.error_string(ef.@"error")) });
+                // Every wallpaper loops forever (`loop-file`, `image-display-
+                // duration`), so reaching its end means nothing in it could be
+                // shown: an empty or damaged picture mpv opened but found no
+                // frame in. Left alone, mpv retries it several times a second.
+                if (ef.reason == mpv.end_reason.eof)
+                    fail("cannot show '{s}': there is no picture or video in it that can be shown", .{st.path});
             },
             mpv.event.playback_restart => reportDecoder(api, h),
             mpv.event.shutdown => return,

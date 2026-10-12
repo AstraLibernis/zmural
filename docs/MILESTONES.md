@@ -47,6 +47,9 @@ and the controls inventory ([CONTROLS.md](CONTROLS.md)), which found controls no
   - [x] the log noted the library every 3 s (Welcome's rescans); now only when its size changes, both OSes (seen on Sway: 5 rescans, 2 lines)
   - [x] ~~a CUDA line on machines without NVIDIA~~ left as is: it is FFmpeg trying NVIDIA's decoder (`hwdec=auto-safe`), harmless; silencing it means listing decoders by hand, which could cost NVIDIA users GPU decoding
   - [x] ~~empty folders left after uninstall~~ left as is: they are the desktop's shared folders (`~/.config/autostart`, `~/.local/share/applications`, the icon theme), which other apps use too
+- [x] **From the adversarial test** (`notes/adversarial-test-2026-10-12.md`), the two highs:
+  - [x] H1 a picture that can't be decoded (text as `.jpg`, empty, too large) applied with exit 0 and froze the old frame while mpv retried 4 times a second: mpv never ends such a file, it says "No media data to loop", so the renderer fails on that (both OSes). `apply` exits 1 in ~0.1 s; `tools/broken-test.sh` (mutation-checked)
+  - [x] H2 Linux: a web package or page was accepted, then given up on silently: refused up front ("web wallpapers are Windows-only so far"), and one saved by an older zmural or reached by rotation falls back with a notification instead of starting a renderer. `tools/broken-test.sh` (mutation-checked)
 - [x] Doc fixes from the blind test: the Welcome page no longer offers web pages on Linux, and says a right click on the tray icon works on most desktops (not Sway's bar); the install examples say the archive makes its own folder; Troubleshooting covers "no file picker available" (xdg-desktop-portal); `export` and `prop` say what they take in `help`; both packages' `README.txt` list the README's commands. waywallen-display's MIT text was already in `THIRD_PARTY_NOTICES.md`, which both packages ship
 
 ## 0.2: Solid on both OSes

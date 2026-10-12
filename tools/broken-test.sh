@@ -60,6 +60,19 @@ z pause; T0=$(date +%s%N); z apply "$P/red.png"; rc=$?; MS=$((($(date +%s%N) - T
 check "…paused too (rc=$rc, ${MS} ms)" "[ $rc = 0 ] && [ $MS -lt 3000 ]"
 z apply "$W/fake.mp4" 2>/dev/null; z apply "$W/fake.mp4" 2>/dev/null; rc=$?; sleep 2
 check "the same broken file again: fails again, after trying again (rc=$rc)" "[ $rc = 1 ] && [ \$(grep -c 'cannot play' $W/daemon.log) -ge 2 ]"
+# Pictures mpv opens but can't decode a frame from: it never ends them, it
+# says "No media data to loop" and tries again, several times a second.
+echo "not a jpeg" >"$W/text.jpg"; : >"$W/empty.png"; magick -size 16384x16384 xc:blue "$W/huge.png"
+for f in text.jpg empty.png huge.png; do
+  z apply "$W/$f" 2>"$W/apply.err"; rc=$?; sleep 1
+  check "a picture that can't be decoded ($f): apply fails, saying so (rc=$rc)" "[ $rc = 1 ] && grep -q 'no picture or video in it could be decoded' $W/apply.err && main | grep -q 'green.png\|red.png'"
+done
+check "…and mpv's retries stop with the renderer" "[ \$(grep -c 'No media data' $W/daemon.log) -le 12 ]"
+# Web wallpapers are Windows-only so far: refused up front, not tried.
+mkdir -p "$W/webpkg"; echo '<h1>hi</h1>' >"$W/webpkg/index.html"
+printf 'title = "Page"\ntype = "web"\nentry = "index.html"\n' >"$W/webpkg/zmural.toml"
+z apply "$W/webpkg/zmural.toml" 2>"$W/apply.err"; rc1=$?; z apply "$W/webpkg/index.html" 2>>"$W/apply.err"; rc2=$?
+check "a web package or page on Linux: refused, saying web is Windows-only (rc $rc1 $rc2)" "[ $rc1 = 1 ] && [ $rc2 = 1 ] && [ \$(grep -c 'Windows-only' $W/apply.err) = 2 ] && ! grep -q 'started (web' $W/daemon.log"
 printf 'broken for now' >"$W/fixed.mp4"; z apply "$W/fixed.mp4" 2>/dev/null; rc1=$?; sleep 2
 cp "$P/green.png" "$W/fixed.mp4"; z apply "$W/fixed.mp4"; rc2=$?
 check "a file fixed after it failed: applied again, it shows (rc $rc1 then $rc2)" "[ $rc1 = 1 ] && [ $rc2 = 0 ]"
@@ -77,6 +90,12 @@ up --apply "$W/fake.mp4"; sleep 2
 check "a broken file with nothing played yet: zmural's own wallpaper" "main | grep -q 'share/zmural/wallpapers/Prism.webm'"
 check "…said in the notice" "grep \"can't show fake.mp4\" $W/notify.log | tail -1 | grep -q 'Showing Prism.webm instead'"
 check "zmural kept running, nothing crashed" "kill -0 $ZD && ! grep -qi 'panic\|segmentation' $W/daemon.log"
+
+# A web package saved by an older zmural: told, and zmural's own instead.
+z quit; sleep 1
+sed -i "s|^wallpaper = .*|wallpaper = '$W/webpkg/zmural.toml'|" "$F"
+up
+check "a saved web wallpaper at start: zmural's own instead, and the user is told" "main | grep -q Prism.webm && grep \"can't show webpkg\" $W/notify.log | grep -q 'Windows-only' && ! grep -q 'started (web' $W/daemon.log"
 
 # 4. A hand edit settings.toml can't use: the user is told once, with the
 #    line, and the file is left alone; told again only after it read fine.

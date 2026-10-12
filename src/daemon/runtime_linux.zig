@@ -1134,10 +1134,11 @@ fn handleRequest(req: control.Request) control.Event {
         },
         .apply => |a| {
             if (a.monitor.len == 0) {
-                applyToAll(a.path) catch |err| return failed(.not_found, switch (err) {
-                    error.NoSuchFile => whyNoFile(a.path),
-                    error.OutOfMemory => "out of memory",
-                });
+                applyToAll(a.path) catch |err| return switch (err) {
+                    error.NoSuchFile => failed(.not_found, whyNoFile(a.path)),
+                    error.WebOnly => failed(.unsupported, web_only),
+                    error.OutOfMemory => failed(.internal, "out of memory"),
+                };
                 return .ok;
             }
             // An empty path: that monitor follows the main wallpaper again.
@@ -1146,6 +1147,7 @@ fn handleRequest(req: control.Request) control.Event {
                 return failed(.not_found, "no such monitor (`zmural-console status` lists them)");
             setOwn(monitor, if (a.path.len > 0) a.path else null) catch |err| return switch (err) {
                 error.NoSuchFile => failed(.not_found, whyNoFile(a.path)),
+                error.WebOnly => failed(.unsupported, web_only),
                 error.OutOfMemory => failed(.internal, "out of memory"),
                 error.TooMany => failed(.bad_request, "too many monitors have their own wallpaper"),
                 error.MainOnly => failed(.unsupported, "a wallpaper package can only be the main wallpaper for now; leave out --monitor"),
@@ -1270,7 +1272,10 @@ fn handleRequest(req: control.Request) control.Event {
                 return .ok;
             }
             const path = stepWallpaper(req == .next) orelse return failed(.not_found, empty);
-            setWallpaper(path) catch return failed(.internal, "out of memory");
+            setWallpaper(path) catch |err| return switch (err) {
+                error.WebOnly => failed(.unsupported, web_only),
+                else => failed(.internal, @errorName(err)),
+            };
             return .ok;
         },
         .reset_settings => {
@@ -1449,16 +1454,21 @@ fn sendProperties(r: *Renderer) void {
 
 /// Can `path` be shown? Only a file that exists, or the built-in test
 /// pattern. A web address is never one; `whyNoFile` says so.
-fn checkPath(path: []const u8) error{NoSuchFile}!void {
+fn checkPath(path: []const u8) error{ NoSuchFile, WebOnly }!void {
     if (std.mem.eql(u8, path, "test-pattern")) return;
     if (kind_mod.isUrl(path)) return error.NoSuchFile;
     std.Io.Dir.cwd().access(rt.io, path, .{}) catch return error.NoSuchFile;
+    if (Kind.forPath(path) == .web) return error.WebOnly;
     // A package must load, so a broken one is refused before anything changes.
     if (adjust.isPackage(path)) {
         var pkg = adjust.loadPackage(rt.gpa, rt.io, null, path) catch return error.NoSuchFile;
-        pkg.set.deinit();
+        defer pkg.set.deinit();
+        if (pkg.kind == .web) return error.WebOnly;
     }
 }
+
+/// Web wallpapers have no renderer on Linux yet (`--renderer web` is a stub).
+const web_only = "web wallpapers are Windows-only so far; on Linux zmural shows videos, pictures and GIFs";
 
 /// What to tell the user when `checkPath` refused `path`.
 fn whyNoFile(path: []const u8) []const u8 {
@@ -1476,7 +1486,7 @@ fn followsMain(d: *const Display) bool {
 
 /// Changes the main wallpaper: what every monitor without its own shows.
 /// Next, Previous and timed rotation go through here.
-fn setWallpaper(path: []const u8) error{ NoSuchFile, OutOfMemory }!void {
+fn setWallpaper(path: []const u8) error{ NoSuchFile, WebOnly, OutOfMemory }!void {
     try checkPath(path);
     const copy = try rt.gpa.dupe(u8, path);
     rt.fallback.retrying(rt.gpa, path);
@@ -1493,7 +1503,7 @@ fn setWallpaper(path: []const u8) error{ NoSuchFile, OutOfMemory }!void {
 }
 
 /// Shows `path` on every monitor: none keeps a wallpaper of its own.
-fn applyToAll(path: []const u8) error{ NoSuchFile, OutOfMemory }!void {
+fn applyToAll(path: []const u8) error{ NoSuchFile, WebOnly, OutOfMemory }!void {
     try checkPath(path);
     for (rt.displays.items) |d| if (!followsMain(d)) unroute(d);
     const had_own = rt.own.len > 0;
@@ -1506,7 +1516,7 @@ fn applyToAll(path: []const u8) error{ NoSuchFile, OutOfMemory }!void {
 
 /// Gives one monitor its own wallpaper, or (`path` null) has it follow the
 /// main one again. The monitor needn't be connected for the second.
-fn setOwn(monitor: MonitorId, path: ?[]const u8) error{ NoSuchFile, OutOfMemory, TooMany, MainOnly }!void {
+fn setOwn(monitor: MonitorId, path: ?[]const u8) error{ NoSuchFile, WebOnly, OutOfMemory, TooMany, MainOnly }!void {
     if (path) |p| {
         try checkPath(p);
         // Its properties are the main wallpaper's (as on Windows).
@@ -1558,6 +1568,12 @@ fn route(d: *Display) void {
             return log.warn("monitor {s}: not showing package {s} (see above)", .{ &d.s.monitor, path });
         file = pkg.entry;
         kind = pkg.kind;
+    }
+    // One saved by an older zmural, or reached by rotation: say so and go
+    // back (`goBackFromBroken`), rather than a renderer that can't start.
+    if (kind == .web) {
+        rt.fallback.failed(rt.gpa, path, web_only);
+        return;
     }
     const fill = rt.fills.fillFor(d.s.monitor, rt.settings.fill);
     const a = rt.router.assign(rt.gpa, d.s.monitor, path, @intFromEnum(fill)) catch return;

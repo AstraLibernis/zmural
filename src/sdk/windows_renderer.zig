@@ -294,8 +294,13 @@ fn drainEvents(s: *Surface) void {
         switch (e.event_id) {
             mpv.event.none => return,
             mpv.event.log_message => {
-                if (!allowLogLine()) continue;
                 const m: *const mpv.LogMessage = @ptrCast(@alignCast(e.data orelse continue)); // zsnag:ok — mpv documents the payload type
+                // Before the rate limit: it is the sign a file can't be shown.
+                if (!no_media_told and std.mem.startsWith(u8, std.mem.span(m.text), no_media)) {
+                    no_media_told = true;
+                    fail("cannot show '{s}': no picture or video in it could be decoded", .{st.path});
+                }
+                if (!allowLogLine()) continue;
                 const level: proto.LogLevel = if (std.mem.eql(u8, std.mem.span(m.level), "warn")) .warn else .err;
                 st.session.log(level, "mpv {s}: {s}", .{ std.mem.span(m.prefix), std.mem.trimEnd(u8, std.mem.span(m.text), "\r\n") });
             },
@@ -309,12 +314,24 @@ fn drainEvents(s: *Surface) void {
                 const ef: *const mpv.EndFile = @ptrCast(@alignCast(e.data orelse continue)); // zsnag:ok — mpv documents the payload type
                 if (ef.reason == mpv.end_reason.@"error")
                     fail("cannot play '{s}': {s}", .{ st.path, std.mem.span(api.error_string(ef.@"error")) });
+                // Every wallpaper loops forever (`loop-file`, `image-display-
+                // duration`), so reaching its end means nothing in it could be
+                // shown: an empty or damaged picture mpv opened but found no
+                // frame in. Left alone, mpv retries it several times a second.
+                if (ef.reason == mpv.end_reason.eof)
+                    fail("cannot show '{s}': there is no picture or video in it that can be shown", .{st.path});
             },
             mpv.event.shutdown => return,
             else => {},
         }
     }
 }
+
+/// What mpv says, again and again, about a file with nothing it can decode:
+/// it never ends the file (every wallpaper loops), so this is the sign.
+const no_media = "No media data to loop";
+/// Said once: the daemon replaces this renderer.
+var no_media_told = false;
 
 /// Rate limit for forwarded mpv log lines; reports how many were dropped.
 fn allowLogLine() bool {
