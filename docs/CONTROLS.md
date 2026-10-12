@@ -17,7 +17,7 @@ File:line references are as of 2026-10-12.
 | `R:<script>` | rig with **real input**: a wlr virtual pointer click (`zig-out/bin/zmural-test-input`, `tools/wl-input.zig`) or real keys typed by `wtype`, on headless Sway |
 | `H:<script>` | rig that **bypasses the control**: a test hook (`ZMURAL_TEST_PICK`, `ZMURAL_TEST_SLOW_UNINSTALL`), a `zmural-console`/control-socket call, a `sed` edit of settings.toml, or a D-Bus call made by the script (gdbus/busctl) instead of a real tray host |
 | `CI` | `.github/workflows/ci.yml`, Windows job (no input is ever sent to the window there) |
-| `M:<date>` | manual, once, recorded in `notes/host-test-*.md`, `notes/windows-check-*.md` or `docs/MILESTONES.md`. Linux manual = owner's Plasma 6.7.5 desktop. Windows manual = Windows 11 25H2 |
+| `M:<date>` | manual, once, recorded in `notes/host-test-*.md`, `notes/windows-check-*.md` or `notes/milestones-2026-08-to-10-12.md` (the retired plan). Linux manual = owner's Plasma 6.7.5 desktop. Windows manual = Windows 11 25H2 |
 | `M(dbus):<date>` | manual, but the "click" was a `busctl`/`gdbus` call from a shell, not a pointer |
 | `—` | nothing found |
 
@@ -29,7 +29,7 @@ only `compositors-test.sh` doesn't mention it), and their `sway.conf` holds only
 So in those rigs there is no tray, no StatusNotifierWatcher/Host, no portal, no FileManager1 and no notification
 daemon. The settings window there runs with `st.bus == null`.
 
-Windows manual passes: `M:2026-09-26` and `M:2026-09-27` (`docs/MILESTONES.md:292`, `:343-352`) were done when the window
+Windows manual passes: `M:2026-09-26` and `M:2026-09-27` (the retired plan, `notes/milestones-2026-08-to-10-12.md`, M5) were done when the window
 was still a separate `zmural-settings.exe` and before the Welcome page, Rescan and Customise existed. `M:2026-10-01` is
 `notes/windows-check-2026-10-01.md` (keyboard mostly, "keys posted to the window or sent as real key presses").
 

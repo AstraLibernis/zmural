@@ -35,7 +35,7 @@ Working today on both Windows and Linux:
 
 **Windows only, so far:** web-page wallpapers (an HTML page saved on your computer; always offline).
 
-**Coming next:** search and tags in the library, then web wallpapers on Linux.
+**Coming next:** fixes from the first public test (0.1.1), then search and tags in the library, then web wallpapers on Linux. [docs/MILESTONES.md](docs/MILESTONES.md) has the plan.
 
 ## What you need
 
@@ -189,12 +189,12 @@ Wallpapers are files people download, so zmural treats them as untrusted. It sho
 - **Game-safe:** no code injection, no debugger attach, no drivers, no hooks into other processes.
 
 **Known limitations** (2 to 5 and 7 concern web wallpapers, which are Windows-only so far)
-1. **Video and image renderers aren't sandboxed.** They run with your normal user rights. On Windows their job only limits what they can do to the user interface (the clipboard, the desktop, display and system settings, logoff); on Linux nothing restricts them. A malicious media file that exploits a bug in the decoder (FFmpeg) could read your files. A real sandbox is planned in M8 (a restricted token or AppContainer on Windows; the Linux design isn't chosen yet).
+1. **Video and image renderers aren't sandboxed.** They run with your normal user rights. On Windows their job only limits what they can do to the user interface (the clipboard, the desktop, display and system settings, logoff); on Linux nothing restricts them. A malicious media file that exploits a bug in the decoder (FFmpeg) could read your files. A real sandbox is planned (0.5; a restricted token or AppContainer on Windows; the Linux design isn't chosen yet).
 2. **Web renderers have no job limits at all.** Chromium's sandbox refuses to start inside a job with UI limits (each limit was tested). The *page* is still sandboxed by Chromium, but zmural's web renderer process and the WebView2 browser process run with your normal rights.
 3. **A web page can read every file in its own folder and the folders below it.** It is offline, so it has no way to send them anywhere short of getting around the offline mode (4). Keep each web wallpaper in its own folder, and never put an `.html` wallpaper next to personal files.
-4. **The offline mode relies on Chromium's proxy settings.** It stops HTTP(S), WebSockets and WebRTC, but it is a configuration, not a firewall rule; a flaw in Chromium could get around it. A sandbox with no network access at all is planned (M8).
+4. **The offline mode relies on Chromium's proxy settings.** It stops HTTP(S), WebSockets and WebRTC, but it is a configuration, not a firewall rule; a flaw in Chromium could get around it. A sandbox with no network access at all is planned (0.5).
 5. **Web pages can play sound on their own.** Wallpapers start muted by default; if you unmute, a page can play audio without a click.
-6. **Releases aren't code-signed yet**, and there is no updater. Windows SmartScreen may warn when you run it; on Linux there is no distro package yet. Signed update checks on Windows and distro packages on Linux are planned (M8).
+6. **Releases aren't code-signed yet**, and there is no updater. Windows SmartScreen may warn when you run it; on Linux there is no distro package yet. Signed update checks on Windows and distro packages on Linux are planned (0.5).
 7. **Browser profiles pile up (Windows):** each web wallpaper you've shown keeps a profile folder under `%LOCALAPPDATA%\zmural\webview2`, with whatever that page stored. Nothing cleans them up while zmural stays installed; uninstalling deletes them.
 
 ## Why another one?
@@ -218,7 +218,7 @@ zmural takes the proven ideas from both and drops the weight. The zmural column 
 - [docs/BUILDING.md](docs/BUILDING.md): building from source, tests, cross-compiling, and the exact system requirements.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how zmural is put together, its design principles, and the full feature plan.
 - [docs/WALLPAPER-FORMAT.md](docs/WALLPAPER-FORMAT.md): making wallpaper packages (`zmural.toml`, properties, the JS API).
-- [docs/MILESTONES.md](docs/MILESTONES.md): the build plan and what's done on each OS.
+- [docs/MILESTONES.md](docs/MILESTONES.md): the plan, release by release, and what works on each OS.
 - [docs/RELEASING.md](docs/RELEASING.md): working builds versus released builds, publishing a release, and reading crash reports.
 - [docs/CONTROLS.md](docs/CONTROLS.md): every button, menu item and command, and what tests it.
 
