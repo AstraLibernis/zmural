@@ -272,6 +272,7 @@ fn runLinux(init: std.process.Init, apply: ?[]const u8, paused: bool, open_setti
             .dbus_address = env.get("DBUS_SESSION_BUS_ADDRESS"),
             .wayland_display = env.get("WAYLAND_DISPLAY"),
             .test_pick = env.get("ZMURAL_TEST_PICK"),
+            .test_controls = env.get("ZMURAL_TEST_CONTROLS"),
             .welcome = welcome,
         },
         .open_settings = open_settings or welcome,

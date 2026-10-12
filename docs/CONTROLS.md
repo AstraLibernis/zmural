@@ -9,6 +9,12 @@ real-input test (`R:`) for every control on Linux, and a recorded pass for every
 
 File:line references are as of 2026-10-12.
 
+**Since 2026-10-12 every settings-window control on Linux is pressed by `tools/controls-test.sh`**
+with a virtual mouse, and what it did is checked (`status`, settings.toml, the bus, the log). The
+window says where it drew each control (`ZMURAL_TEST_CONTROLS`), so the rig finds them by name and
+scrolls to them; file pickers are the one part answered by a hook (`ZMURAL_TEST_PICK`), since they
+are the desktop's own windows. Windows has no such rig: its column is the manual pass.
+
 ## Legend
 
 | Code | Meaning |
@@ -42,11 +48,11 @@ Click → `app.pending` → `perform()` (`app.zig:384-455`) after the frame. Lin
 
 | Control | What it does | Linux test | Windows test | Gap/risk |
 |---|---|---|---|---|
-| Sidebar pages Welcome / Wallpapers / Playback / Pausing / General (`app.zig:676-688`) | sets `app.page` | `R:keyboard-test` (wtype Home/Down/Return, steps 4-5), `R:uninstall-test` (same keys); pointer: `M:2026-10-11` | `M:2026-10-01` (keys); `M:2026-09-27` (pre-Welcome) | No rig clicks the sidebar with the pointer |
-| Now-playing card: Previous (`app.zig:718-727`, key `np`,0) | `.previous` request | — | — (09-27 lists next, pause, unmute only) | untested anywhere |
-| Now-playing: Pause/Play (`np`,1) | `.pause`/`.play` | `R:settings-test` step 4 (pointer at 115,680, `settings-test.sh:62`); `R:keyboard-test` step 1 (Enter) | `M:2026-09-27` | — |
-| Now-playing: Next (`np`,2) | `.next` | — | `M:2026-09-27` | untested on Linux |
-| Now-playing: Mute/Unmute (`np`,3) | `.set_muted` | — | `M:2026-09-27` (unmute) | untested on Linux |
+| Sidebar pages Welcome / Wallpapers / Playback / Pausing / General (`app.zig:676-688`) | sets `app.page` | `R:controls-test`; `R:keyboard-test` (wtype Home/Down/Return, steps 4-5), `R:uninstall-test` (same keys); pointer: `M:2026-10-11` | `M:2026-10-01` (keys); `M:2026-09-27` (pre-Welcome) | No rig clicks the sidebar with the pointer |
+| Now-playing card: Previous (`app.zig:718-727`, key `np`,0) | `.previous` request | `R:controls-test`; — | — (09-27 lists next, pause, unmute only) | untested anywhere |
+| Now-playing: Pause/Play (`np`,1) | `.pause`/`.play` | `R:controls-test`; `R:settings-test` step 4 (pointer at 115,680, `settings-test.sh:62`); `R:keyboard-test` step 1 (Enter) | `M:2026-09-27` | — |
+| Now-playing: Next (`np`,2) | `.next` | `R:controls-test`; — | `M:2026-09-27` | untested on Linux |
+| Now-playing: Mute/Unmute (`np`,3) | `.set_muted` | `R:controls-test`; — | `M:2026-09-27` (unmute) | untested on Linux |
 | Offline banner "Start zmural" (`app.zig:843`) | `platform.startDaemon` (Linux: spawn `<exe_dir>/zmural`, `platform_linux.zig:1027`; Win: `ShellExecuteW`, `platform_windows.zig:303`) | — | `M:2026-09-27` | Since 09-30 the window is a thread *inside* zmural, so the banner only shows while it is reconnecting; untested on Linux |
 | Toast (`app.zig:565`, drawn `app.zig:1400-1412`, 4 s) | every failure message in the window | — (no rig ever asserts a toast; `import-test` reads the report file, not the toast) | — | The only error channel for Open/Show in folder/pickers is never checked |
 | Escape closes the window (`app.zig:648`, `:658`) | `platform.requestClose` | `R:keyboard-test` step 6; `M:2026-10-06`, `M:2026-10-11` | `M:2026-10-01` | — |
@@ -71,64 +77,64 @@ Click → `app.pending` → `perform()` (`app.zig:384-455`) after the frame. Lin
 
 | Control | What it does | Linux test | Windows test | Gap/risk |
 |---|---|---|---|---|
-| Up to 4 wallpaper tiles (`wallpaperTile("welcome-tile")`, `app.zig:946`) | `.apply` | `R:settings-test` step 8 (pointer at 415,250, `settings-test.sh:107`); `M:2026-10-06`, `M:2026-10-11` | — (Welcome never tested on Windows: `host-test-2026-10-06.md:115`) | — |
-| Tile right-click (same tiles) | tile menu | — | — | — |
-| "Wallpapers" button (`app.zig:950`) | `show_page = .wallpapers` | — | — | untested |
-| Folder row **Open** ×2 (`app.zig:964`) | `.open_folder` → `platform.openFolder`: **Linux** `createDirPath` then `spawn xdg-open <dir>` (`platform_linux.zig:1043-1048`); **Windows** `createDirPath` then `ShellExecuteW "open"` (`platform_windows.zig:255-261`) | `M:2026-10-06` (KDE: made `~/Pictures/Wallpapers`, opened Dolphin) | — | **Linux: toast only if `spawn` itself fails (xdg-open binary missing). If xdg-open runs and finds no handler (Sway with no file manager) it exits non-zero, the `Child` is discarded (`_ =`), never waited (also left a zombie until zmural exits), and the user sees nothing.** Windows ignores `ShellExecuteW`'s return. Matches the blind-test finding |
-| **Add folder** (`app.zig:969`) | `platform.pick(.folder)`: Linux portal `FileChooser.OpenFile` with `directory=true` (`platform_linux.zig:1067-1135`), toast if no bus/portal; Windows `IFileDialog` (`platform_windows.zig:183-200`) | `M:2026-10-06` (dialog opened, cancelled with Escape); no rig | — | Never completed on Linux; the `ZMURAL_TEST_PICK` hook exists but no rig uses it for `.folder` |
-| **Open file** (`app.zig:972`) | `pick(.wallpaper)`: a `.zip` → `startImport` (spawns `zmural-console import … --apply --report`), else `.apply` | `M:2026-10-06` (dialog opened, cancelled) | — | Welcome's copy never clicked by a rig (import-test clicks the Wallpapers page one) |
+| Up to 4 wallpaper tiles (`wallpaperTile("welcome-tile")`, `app.zig:946`) | `.apply` | `R:controls-test`; `R:settings-test` step 8 (pointer at 415,250, `settings-test.sh:107`); `M:2026-10-06`, `M:2026-10-11` | — (Welcome never tested on Windows: `host-test-2026-10-06.md:115`) | — |
+| Tile right-click (same tiles) | tile menu | `R:controls-test`; — | — | — |
+| "Wallpapers" button (`app.zig:950`) | `show_page = .wallpapers` | `R:controls-test`; — | — | untested |
+| Folder row **Open** ×2 (`app.zig:964`) | `.open_folder` → `platform.openFolder`: **Linux** `createDirPath` then `spawn xdg-open <dir>` (`platform_linux.zig:1043-1048`); **Windows** `createDirPath` then `ShellExecuteW "open"` (`platform_windows.zig:255-261`) | `R:controls-test`; `M:2026-10-06` (KDE: made `~/Pictures/Wallpapers`, opened Dolphin) | — | **Linux: toast only if `spawn` itself fails (xdg-open binary missing). If xdg-open runs and finds no handler (Sway with no file manager) it exits non-zero, the `Child` is discarded (`_ =`), never waited (also left a zombie until zmural exits), and the user sees nothing.** Windows ignores `ShellExecuteW`'s return. Matches the blind-test finding |
+| **Add folder** (`app.zig:969`) | `platform.pick(.folder)`: Linux portal `FileChooser.OpenFile` with `directory=true` (`platform_linux.zig:1067-1135`), toast if no bus/portal; Windows `IFileDialog` (`platform_windows.zig:183-200`) | `R:controls-test`; `M:2026-10-06` (dialog opened, cancelled with Escape); no rig | — | Never completed on Linux; the `ZMURAL_TEST_PICK` hook exists but no rig uses it for `.folder` |
+| **Open file** (`app.zig:972`) | `pick(.wallpaper)`: a `.zip` → `startImport` (spawns `zmural-console import … --apply --report`), else `.apply` | `R:controls-test`; `M:2026-10-06` (dialog opened, cancelled) | — | Welcome's copy never clicked by a rig (import-test clicks the Wallpapers page one) |
 | Auto-rescan every 3 s while Welcome shows (`app.zig:368-376`) | `.rescan` | `R:settings-test` step 8 ("Welcome finds a new picture by itself") | — | — |
 
 ### Wallpapers (`pageWallpapers` `app.zig:991`, `drawWallpaperButtons` `:817-832`, `wallpaperTile` `:1029-1053`)
 
 | Control | What it does | Linux test | Windows test | Gap/risk |
 |---|---|---|---|---|
-| **Rescan** (`app.zig:829`) | `.rescan`, reload list ×3 polls | — | `M:2026-10-01` (40e2f0a, 9→10) | untested on Linux |
-| **Open file** (`app.zig:830`) | `pick(.wallpaper)` → apply or zip import | `H:import-test` step 6 (`import-test.sh:122-138`): **real pointer click** at 1057,61, but the picker is answered by `ZMURAL_TEST_PICK` (`platform_linux.zig:1068`), so the portal is never called; `M:2026-10-06` (portal dialog seen, cancelled) | — | Portal round trip (Request/Response signal, `uriPath`) only covered by `U` `platform_linux.zig:1423` (uriPath) |
-| **Add folder** (`app.zig:831`) | `pick(.folder)` | — | (General's copy `M:2026-09-27`) | — |
-| Tile left click (`app.zig:1051`) | `.apply` path | `R:settings-test` step 4 (pointer 415,190); `R:keyboard-test` step 2 (Enter); `M:2026-10-11` | `M:2026-09-27`; `M:2026-10-01` (Enter) | — |
-| Tile right-click / Menu key (`app.zig:1052`) | `tileMenu()` (`app.zig:321-334`) → `platform.menu` (Linux overlay `platform_linux.zig:947`; Win `TrackPopupMenuEx` `platform_windows.zig:203-226`) | Menu key: `R:keyboard-test` step 3; **pointer right-click: no rig** (`wl-input.zig` supports `rclick`, no script uses it); `M:2026-10-06`, `M:2026-10-11` (menu seen) | `M:2026-10-01` (Menu key, Shift+F10) | — |
-| Menu: "Show on desktop" / "Show on every monitor" | `menuChosen` choice 0 → `.apply` (`app.zig:490-503`) | `R:keyboard-test` step 3 (Menu, Return) | — | pointer selection in the overlay (`platform_linux.zig:872`) never clicked |
-| Menu: "Show on monitor N (name)" (only with >1 monitor) | `.apply` with monitor id | — (`monitors-test` uses the CLI only) | — | untested |
-| Menu: **"Show in folder"** | `platform.showInFolder`: **Linux** D-Bus `org.freedesktop.FileManager1.ShowItems` (`platform_linux.zig:1051-1063`), toast "the file manager didn't answer" / "no session bus"; **Windows** `explorer.exe /select,"…"` (`platform_windows.zig:245-251`), result ignored | — | — | **Never chosen in any test, on either OS** (06/11 only saw the line) |
-| Click outside the menu closes it (`platform_linux.zig:879`) | close overlay | — | n/a | — |
+| **Rescan** (`app.zig:829`) | `.rescan`, reload list ×3 polls | `R:controls-test`; — | `M:2026-10-01` (40e2f0a, 9→10) | untested on Linux |
+| **Open file** (`app.zig:830`) | `pick(.wallpaper)` → apply or zip import | `R:controls-test`; `H:import-test` step 6 (`import-test.sh:122-138`): **real pointer click** at 1057,61, but the picker is answered by `ZMURAL_TEST_PICK` (`platform_linux.zig:1068`), so the portal is never called; `M:2026-10-06` (portal dialog seen, cancelled) | — | Portal round trip (Request/Response signal, `uriPath`) only covered by `U` `platform_linux.zig:1423` (uriPath) |
+| **Add folder** (`app.zig:831`) | `pick(.folder)` | `R:controls-test`; — | (General's copy `M:2026-09-27`) | — |
+| Tile left click (`app.zig:1051`) | `.apply` path | `R:controls-test`; `R:settings-test` step 4 (pointer 415,190); `R:keyboard-test` step 2 (Enter); `M:2026-10-11` | `M:2026-09-27`; `M:2026-10-01` (Enter) | — |
+| Tile right-click / Menu key (`app.zig:1052`) | `tileMenu()` (`app.zig:321-334`) → `platform.menu` (Linux overlay `platform_linux.zig:947`; Win `TrackPopupMenuEx` `platform_windows.zig:203-226`) | `R:controls-test`; Menu key: `R:keyboard-test` step 3; **pointer right-click: no rig** (`wl-input.zig` supports `rclick`, no script uses it); `M:2026-10-06`, `M:2026-10-11` (menu seen) | `M:2026-10-01` (Menu key, Shift+F10) | — |
+| Menu: "Show on desktop" / "Show on every monitor" | `menuChosen` choice 0 → `.apply` (`app.zig:490-503`) | `R:controls-test`; `R:keyboard-test` step 3 (Menu, Return) | — | pointer selection in the overlay (`platform_linux.zig:872`) never clicked |
+| Menu: "Show on monitor N (name)" (only with >1 monitor) | `.apply` with monitor id | `R:controls-test`; — (`monitors-test` uses the CLI only) | — | untested |
+| Menu: **"Show in folder"** | `platform.showInFolder`: **Linux** D-Bus `org.freedesktop.FileManager1.ShowItems` (`platform_linux.zig:1051-1063`), toast "the file manager didn't answer" / "no session bus"; **Windows** `explorer.exe /select,"…"` (`platform_windows.zig:245-251`), result ignored | `R:controls-test`; — | — | **Never chosen in any test, on either OS** (06/11 only saw the line) |
+| Click outside the menu closes it (`platform_linux.zig:879`) | close overlay | `R:controls-test`; — | n/a | — |
 
 ### Playback (`pagePlayback` `app.zig:1055-1123`, `pageProperties` `:1127-1195`)
 
 | Control | What it does | Linux test | Windows test | Gap/risk |
 |---|---|---|---|---|
-| Fit: Crop/Fit/Stretch/Center (`app.zig:1070`) | `.set_fill` | `R:keyboard-test` step 4 (Right → `fill = "fit"`); `M:2026-10-11` (click) | `M:2026-09-27`; `M:2026-10-01` (End) | — |
-| Volume slider (`app.zig:1075`) | live `.set_volume` every 80 ms while dragging, final on release | `R:keyboard-test` step 4 (Right ×2 → 60, End → 100) | `M:2026-09-27` | pointer drag (the live-throttle path) never tested |
-| Mute wallpapers toggle (`app.zig:1094`) | `.set_muted` | `M:2026-10-11` (click) | — | no rig |
-| Pause wallpapers toggle (`app.zig:1097`) | `.pause`/`.play` | — | `M:2026-09-27` | untested on Linux |
-| Customise: slider per property (`app.zig:1145`) | live `.set_property` + on release | `U` `app.zig:1414` (propValue only); the effect via `H:props-test` (CLI `prop`) | `M:2026-10-01` (arrow keys moved gamma) | never driven in the window on Linux |
-| Customise: checkbox toggle (`app.zig:1166`) | `.set_property` "true"/"false" | — | — | untested (only packages bring checkboxes) |
-| Customise: dropdown (2-4 options) segmented (`app.zig:1181`) | `.set_property` | — | — | untested |
-| Customise: Reset (`app.zig:1194`) | `.reset_properties` | `H:props-test` (CLI `prop --reset`) | — | button never pressed |
-| Change every: Off/5/15/30 min/1 h/3 h (`app.zig:1108`) | `.set_rotation minutes` | `U` `app.zig:1227` (nearestPreset) | — | button never pressed (CLI `rotate` is `M` only) |
-| Order: By name/Shuffle/Random (`app.zig:1120`) | `.set_rotation order` | — | — | untested in the window |
+| Fit: Crop/Fit/Stretch/Center (`app.zig:1070`) | `.set_fill` | `R:controls-test`; `R:keyboard-test` step 4 (Right → `fill = "fit"`); `M:2026-10-11` (click) | `M:2026-09-27`; `M:2026-10-01` (End) | — |
+| Volume slider (`app.zig:1075`) | live `.set_volume` every 80 ms while dragging, final on release | `R:controls-test`; `R:keyboard-test` step 4 (Right ×2 → 60, End → 100) | `M:2026-09-27` | pointer drag (the live-throttle path) never tested |
+| Mute wallpapers toggle (`app.zig:1094`) | `.set_muted` | `R:controls-test`; `M:2026-10-11` (click) | — | no rig |
+| Pause wallpapers toggle (`app.zig:1097`) | `.pause`/`.play` | `R:controls-test`; — | `M:2026-09-27` | untested on Linux |
+| Customise: slider per property (`app.zig:1145`) | live `.set_property` + on release | `R:controls-test`; `U` `app.zig:1414` (propValue only); the effect via `H:props-test` (CLI `prop`) | `M:2026-10-01` (arrow keys moved gamma) | never driven in the window on Linux |
+| Customise: checkbox toggle (`app.zig:1166`) | `.set_property` "true"/"false" | `R:controls-test`; — | — | untested (only packages bring checkboxes) |
+| Customise: dropdown (2-4 options) segmented (`app.zig:1181`) | `.set_property` | `R:controls-test`; — | — | untested |
+| Customise: Reset (`app.zig:1194`) | `.reset_properties` | `R:controls-test`; `H:props-test` (CLI `prop --reset`) | — | button never pressed |
+| Change every: Off/5/15/30 min/1 h/3 h (`app.zig:1108`) | `.set_rotation minutes` | `R:controls-test`; `U` `app.zig:1227` (nearestPreset) | — | button never pressed (CLI `rotate` is `M` only) |
+| Order: By name/Shuffle/Random (`app.zig:1120`) | `.set_rotation order` | `R:controls-test`; — | — | untested in the window |
 
 ### Pausing (`pagePausing` `app.zig:1259-1307`)
 
 | Control | What it does | Linux test | Windows test | Gap/risk |
 |---|---|---|---|---|
-| Rule segmented Nothing/Mute/Pause/Stop, per exposed condition (12 conditions, `app.zig:1280`) | `.set_rule` | `M:2026-10-11` (fullscreen rule, click). The *rules' effect* is rig-tested by editing settings.toml (`H:sway-test` `:158`, `H:kde-test` `:129`, `H:compositors-test`, `H:niri-test`), never via this control | `M:2026-09-27` (Stop) | — |
-| App list: **Add app** (`app.zig:1337`) | `pick(.app)` → basename → `.set_list app_rules` | — | `M:2026-09-27` (notepad.exe) | Linux: never; rigs `sed` the `apps =` line |
-| App list: remove × (`app.zig:1333`) | `.set_list` without it | — | — | untested |
-| Wait before resuming slider (`app.zig:1293`) | `.set_resume_after` on release | — | — | untested |
+| Rule segmented Nothing/Mute/Pause/Stop, per exposed condition (12 conditions, `app.zig:1280`) | `.set_rule` | `R:controls-test`; `M:2026-10-11` (fullscreen rule, click). The *rules' effect* is rig-tested by editing settings.toml (`H:sway-test` `:158`, `H:kde-test` `:129`, `H:compositors-test`, `H:niri-test`), never via this control | `M:2026-09-27` (Stop) | — |
+| App list: **Add app** (`app.zig:1337`) | `pick(.app)` → basename → `.set_list app_rules` | `R:controls-test`; — | `M:2026-09-27` (notepad.exe) | Linux: never; rigs `sed` the `apps =` line |
+| App list: remove × (`app.zig:1333`) | `.set_list` without it | `R:controls-test`; — | — | untested |
+| Wait before resuming slider (`app.zig:1293`) | `.set_resume_after` on release | `R:controls-test`; — | — | untested |
 
 ### General (`pageGeneral` `app.zig:1341-1398`)
 
 | Control | What it does | Linux test | Windows test | Gap/risk |
 |---|---|---|---|---|
-| Start at login toggle (`app.zig:1347`) | `platform.setAutostart` (Linux `autostart_linux.write`, `platform_linux.zig:985`; Win HKCU Run `platform_windows.zig:316`), toast on error | `M:2026-10-11` (click → `Hidden=true`, back). Entry format: `U` `autostart_linux.zig:98`, `:107`; `H:instance-test` (CLI `autostart`) | `M:2026-09-27`; `U` `autostart.zig:142`; `CI` (CLI `autostart` only) | button never pressed by a rig |
-| Library folder remove × (`app.zig:1370`) | `.set_list library_dirs` | — | `M:2026-09-27` | untested on Linux |
-| Add folder (`app.zig:1375`) | `pick(.folder)` | — | `M:2026-09-27` | untested on Linux |
+| Start at login toggle (`app.zig:1347`) | `platform.setAutostart` (Linux `autostart_linux.write`, `platform_linux.zig:985`; Win HKCU Run `platform_windows.zig:316`), toast on error | `R:controls-test`; `M:2026-10-11` (click → `Hidden=true`, back). Entry format: `U` `autostart_linux.zig:98`, `:107`; `H:instance-test` (CLI `autostart`) | `M:2026-09-27`; `U` `autostart.zig:142`; `CI` (CLI `autostart` only) | button never pressed by a rig |
+| Library folder remove × (`app.zig:1370`) | `.set_list library_dirs` | `R:controls-test`; — | `M:2026-09-27` | untested on Linux |
+| Add folder (`app.zig:1375`) | `pick(.folder)` | `R:controls-test`; — | `M:2026-09-27` | untested on Linux |
 | Crash row (read-only, `app.zig:1384`) | shows `status.crash` | `M:2026-10-11` | — | — |
-| **Log file > Open** (`app.zig:1387`) | `platform.openFile(log)`: **Linux** `spawn xdg-open <log>` (`platform_linux.zig:1035-1039`; doc comment still says "the settings file"); **Windows** `ShellExecuteW notepad.exe <log>` (`platform_windows.zig:264-270`) | — (10-11 lists the *row* only) | — | **Never pressed on either OS.** Linux has the same silent-failure path as Welcome's Open (exit status of xdg-open ignored; a `.log` with no text-editor association does nothing). Windows ignores `ShellExecuteW`'s result |
-| Reset playback and pausing (`app.zig:1390`) | `confirm` → `.reset_settings` | `R:keyboard-test` step 5: only the **No** path (Enter on focused No; checks nothing changed). Yes never pressed | `M:2026-09-27` (reset done); `M:2026-10-01` (opens on No) | the Yes path on Linux is untested |
-| **Uninstall** (`app.zig:1393`) | `confirm` → `.uninstall_confirmed` (`app.zig:441-444`). Linux: set `uninstall_on_exit`, send `.quit`; zmural runs `uninstall.run` after shutdown (`daemon/main.zig:290-291`), ends with a notification (`uninstall.zig:252-259`). Windows: spawn `zmural --uninstall --from-window` (`platform_windows.zig:273-279`), ends with a MessageBox (`uninstall.zig:244-251`) | `R:uninstall-test` steps 2-3 (wtype keys, Left+Return for Yes; part 3 adds `ZMURAL_TEST_SLOW_UNINSTALL=1500` and a session kill). **Checks only the end state** (process gone, files gone). `M:2026-10-11` was the old child-process code, fixed 10-12; the new path was not tried on a desktop | `CI` and `M:2026-10-01` ran the uninstaller **command** (`zmural-console uninstall --yes`; the registered `--uninstall --from-window`), not the button's Yes | No progress UI exists. See "lone Yes" below |
-| Confirm dialog Yes / No (Linux in-window `platform_linux.zig:881-903`; Windows `MessageBoxW` MB_YESNO+MB_DEFBUTTON2 `platform_windows.zig:228-234`) | `app_mod.confirmed` | Yes: `R:uninstall-test` (keys); No: `R:keyboard-test`; pointer: — | `M:2026-10-01` (No) | **Lone Yes:** `if (ui.button(yes)) {…} else if (ui.button(no))` (`platform_linux.zig:897-903`) skips drawing No on the frame Yes is pressed, and that frame is presented |
+| **Log file > Open** (`app.zig:1387`) | `platform.openFile(log)`: **Linux** `spawn xdg-open <log>` (`platform_linux.zig:1035-1039`; doc comment still says "the settings file"); **Windows** `ShellExecuteW notepad.exe <log>` (`platform_windows.zig:264-270`) | `R:controls-test`; — (10-11 lists the *row* only) | — | **Never pressed on either OS.** Linux has the same silent-failure path as Welcome's Open (exit status of xdg-open ignored; a `.log` with no text-editor association does nothing). Windows ignores `ShellExecuteW`'s result |
+| Reset playback and pausing (`app.zig:1390`) | `confirm` → `.reset_settings` | `R:controls-test`; `R:keyboard-test` step 5: only the **No** path (Enter on focused No; checks nothing changed). Yes never pressed | `M:2026-09-27` (reset done); `M:2026-10-01` (opens on No) | the Yes path on Linux is untested |
+| **Uninstall** (`app.zig:1393`) | `confirm` → `.uninstall_confirmed` (`app.zig:441-444`). Linux: set `uninstall_on_exit`, send `.quit`; zmural runs `uninstall.run` after shutdown (`daemon/main.zig:290-291`), ends with a notification (`uninstall.zig:252-259`). Windows: spawn `zmural --uninstall --from-window` (`platform_windows.zig:273-279`), ends with a MessageBox (`uninstall.zig:244-251`) | `R:controls-test`; `R:uninstall-test` steps 2-3 (wtype keys, Left+Return for Yes; part 3 adds `ZMURAL_TEST_SLOW_UNINSTALL=1500` and a session kill). **Checks only the end state** (process gone, files gone). `M:2026-10-11` was the old child-process code, fixed 10-12; the new path was not tried on a desktop | `CI` and `M:2026-10-01` ran the uninstaller **command** (`zmural-console uninstall --yes`; the registered `--uninstall --from-window`), not the button's Yes | No progress UI exists. See "lone Yes" below |
+| Confirm dialog Yes / No (Linux in-window `platform_linux.zig:881-903`; Windows `MessageBoxW` MB_YESNO+MB_DEFBUTTON2 `platform_windows.zig:228-234`) | `app_mod.confirmed` | `R:controls-test`; Yes: `R:uninstall-test` (keys); No: `R:keyboard-test`; pointer: — | `M:2026-10-01` (No) | **Lone Yes:** `if (ui.button(yes)) {…} else if (ui.button(no))` (`platform_linux.zig:897-903`) skips drawing No on the frame Yes is pressed, and that frame is presented |
 | About row (read-only) | — | — | — | — |
 
 ## 3. Tray, Linux (`src/daemon/tray_linux.zig`, dispatch `runtime_linux.zig:318-366`)

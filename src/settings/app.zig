@@ -692,7 +692,9 @@ fn drawSidebar() void {
     var selected_y: f32 = 0;
     for (pages, 0..) |entry, i| {
         const r: Rect = .{ .x = 8, .y = top + 12 + @as(f32, @floatFromInt(i)) * 40, .w = sidebar_w - 16, .h = 36 };
+        ui.label = entry[1];
         const in = ui.interact(key("nav", i), r);
+        ui.label = "";
         const is_sel = app.page == entry[0];
         if (is_sel) selected_y = r.y;
         const hover = ui.anim(key("nav-hover", i), if (in.hovered) 1 else 0);
@@ -1112,7 +1114,10 @@ fn wallpaperTile(comptime name: []const u8, i: usize, r: Rect) void {
     const ui = &app.ui;
     const p = ui.pal;
     const path = app.known.library[i];
+    const label = if (i < app.known.labels.len) app.known.labels[i] else zmural.media.displayName(path);
+    ui.label = label;
     const in = ui.interact(key(name, i), r);
+    ui.label = "";
     const hover = ui.anim(key(name ++ "-hover", i), if (in.hovered) 1 else 0);
     const lift = hover * 2;
     const tr: Rect = .{ .x = r.x - lift, .y = r.y - lift, .w = r.w + 2 * lift, .h = r.h + 2 * lift };
@@ -1120,7 +1125,6 @@ fn wallpaperTile(comptime name: []const u8, i: usize, r: Rect) void {
     // A dark fade under the name, so it reads on any picture.
     const scrim: Rect = .{ .x = tr.x, .y = tr.y + tr.h * 0.55, .w = tr.w, .h = tr.h * 0.45 };
     ui.gradient(scrim, 6, gui.rgba(0x00000000), gui.rgba(0x000000A6));
-    const label = if (i < app.known.labels.len) app.known.labels[i] else zmural.media.displayName(path);
     ui.text(.{ .x = tr.x + 10, .y = tr.bottom() - 30, .w = tr.w - 20, .h = 24 }, label, .body, .left, gui.rgba(0xFFFFFFFF));
     const current = std.ascii.eqlIgnoreCase(path, app.known.wallpaper);
     if (current) {

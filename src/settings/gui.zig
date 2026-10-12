@@ -289,6 +289,12 @@ pub const Ui = struct {
     /// keyboard opens there).
     focus_rect: ?Rect = null,
 
+    /// Testing aid (`names_on`): every control the pointer could press this
+    /// frame, and the label the widget being drawn gives it.
+    drawn: [max_drawn]Drawn = undefined,
+    drawn_len: usize = 0,
+    label: []const u8 = "",
+
     anims: std.AutoHashMapUnmanaged(u64, f32) = .empty,
     /// Something is still moving: draw another frame soon.
     animating: bool = false,
@@ -315,6 +321,7 @@ pub const Ui = struct {
         ui.group = 0;
         ui.arrows_used = false;
         ui.focus_rect = null;
+        ui.drawn_len = 0;
         return true;
     }
 
@@ -409,6 +416,12 @@ pub const Ui = struct {
 
     /// The pointer alone: for parts of a widget that is focused as a whole.
     pub fn pointer(ui: *Ui, id: u64, r: Rect) Interaction {
+        if (names_on and ui.drawn_len < max_drawn) {
+            const c: Point = .{ .x = r.x + r.w / 2, .y = r.y + r.h / 2 };
+            const screen: Rect = .{ .x = 0, .y = 0, .w = ui.size.x, .h = ui.size.y };
+            ui.drawn[ui.drawn_len] = .{ .id = id, .r = r, .label = ui.label, .visible = ui.clip.contains(c) and screen.contains(c) };
+            ui.drawn_len += 1;
+        }
         const over = ui.clip.contains(ui.mouse) and r.contains(ui.mouse);
         if (over and ui.pressed) {
             ui.active = id;
@@ -544,7 +557,9 @@ pub const Ui = struct {
     // ---- widgets -------------------------------------------------------------------
 
     pub fn button(ui: *Ui, id: u64, r: Rect, label: []const u8, icon: ?Icon, kind: Kind) bool {
+        ui.label = label;
         const in = ui.interact(id, r);
+        ui.label = "";
         const p = ui.pal;
         const hover = ui.anim(id, if (in.hovered) 1 else 0);
         const fg = switch (kind) {
@@ -612,7 +627,11 @@ pub const Ui = struct {
         ui.fill(.{ .x = pill.x + pill.w / 2 - 8, .y = pill.bottom() - 3, .w = 16, .h = 3 }, 1.5, p.accent);
         for (labels, 0..) |label, i| {
             const seg: Rect = .{ .x = r.x + seg_w * @as(f32, @floatFromInt(i)), .y = r.y, .w = seg_w, .h = r.h };
+            // A segment is named as its row, told apart by its label.
+            if (names_on) nameAs(id +% 1 +% i, id);
+            ui.label = label;
             const in = ui.pointer(id +% 1 +% i, seg);
+            ui.label = "";
             if (in.clicked) ui.focus = id; // the whole row keeps the focus
             if (i != selected and in.hovered) ui.fill(seg.inset(2, 2), 3, p.subtle_hover);
             ui.text(seg, label, if (i == selected) .body_strong else .body, .center, if (i == selected) p.text else p.text2);
@@ -713,7 +732,49 @@ pub fn nearest(rects: []const Rect, groups: []const u8, from: usize, dir: Dir) ?
 
 /// Stable widget IDs: a name plus an index.
 pub fn key(comptime name: []const u8, index: usize) u64 {
-    return std.hash.Wyhash.hash(index, name);
+    const id = std.hash.Wyhash.hash(index, name);
+    if (names_on) remember(id, name, index);
+    return id;
+}
+
+// ---- testing aid: where each control is, by name ----------------------------------------
+
+/// `ZMURAL_TEST_CONTROLS=<file>`: the window writes where each control was
+/// drawn (`writeDrawn`), so a rig can press it with a real pointer instead
+/// of guessing coordinates. Off otherwise: `key` records nothing.
+pub var names_on = false;
+
+pub const max_drawn = 512;
+pub const Drawn = struct { id: u64, r: Rect, visible: bool, label: []const u8 };
+
+const Name = struct { id: u64, name: []const u8, index: usize };
+var names: [1024]Name = undefined;
+var names_len: usize = 0;
+
+fn remember(id: u64, name: []const u8, index: usize) void {
+    for (names[0..names_len]) |n| if (n.id == id) return;
+    if (names_len == names.len) return;
+    names[names_len] = .{ .id = id, .name = name, .index = index };
+    names_len += 1;
+}
+
+fn nameAs(id: u64, as: u64) void {
+    for (names[0..names_len]) |n| if (n.id == as) return remember(id, n.name, n.index);
+}
+
+fn nameOf(id: u64) ?Name {
+    for (names[0..names_len]) |n| if (n.id == id) return n;
+    return null;
+}
+
+/// One line per named control drawn this frame:
+/// `name <tab> index <tab> label <tab> x <tab> y <tab> w <tab> h <tab> visible`,
+/// in the window's own coordinates (DIPs).
+pub fn writeDrawn(ui: *const Ui, w: *std.Io.Writer) !void {
+    for (ui.drawn[0..ui.drawn_len]) |d| {
+        const n = nameOf(d.id) orelse continue;
+        try w.print("{s}\t{d}\t{s}\t{d:.0}\t{d:.0}\t{d:.0}\t{d:.0}\t{d}\n", .{ n.name, n.index, d.label, d.r.x, d.r.y, d.r.w, d.r.h, @intFromBool(d.visible) });
+    }
 }
 
 /// One frame's focus order for the tests: widgets as (id, group, rect).

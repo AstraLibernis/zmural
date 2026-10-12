@@ -27,6 +27,9 @@ pub const Env = struct {
     wayland_display: ?[]const u8 = null,
     /// Testing aid: `ZMURAL_TEST_PICK=<path>` answers every file picker with
     /// that path (a picker is the desktop's own window, which the headless
-    /// test rigs can't drive).
+    /// test rigs can't drive); `@<file>` with what that file holds then.
     test_pick: ?[]const u8 = null,
+    /// Testing aid: `ZMURAL_TEST_CONTROLS=<path>` keeps that file listing
+    /// where each control is (`gui.writeDrawn`), for rigs that click them.
+    test_controls: ?[]const u8 = null,
 };

@@ -137,6 +137,9 @@ const State = struct {
     /// `xdg-open`s not yet reaped (`open`, `checkOpeners`).
     openers: [4]Opener = @splat(.{}),
     test_pick: ?[]const u8 = null,
+    test_controls: ?[]const u8 = null,
+    /// What was last written there, so an unchanged frame writes nothing.
+    controls_hash: u64 = 0,
     conn: wl.Conn = undefined,
     registry: wl.ObjectId = 0,
     compositor: wl.ObjectId = 0,
@@ -297,6 +300,8 @@ pub fn run(env: Env, token: []const u8) !void {
     st.gpa = gpa;
     st.io = env.io;
     st.test_pick = env.test_pick;
+    st.test_controls = env.test_controls;
+    gui.names_on = env.test_controls != null;
     st.runtime_dir = env.runtime_dir;
     st.home = env.home;
     st.config_home = env.config_home;
@@ -763,12 +768,30 @@ fn render() !void {
         if (st.key_queue_len > 0) st.need_redraw = true;
     }
     app_mod.frame();
+    if (st.test_controls) |path| writeControls(path);
     const c = &st.conn;
     try c.request(st.surface, op.surface_attach, &.{ .{ .object = buf.id }, .{ .int = 0 }, .{ .int = 0 } });
     if (st.compositor_version >= 3) try c.request(st.surface, op.surface_set_buffer_scale, &.{.{ .int = st.scale }});
     try c.request(st.surface, op.surface_damage_buffer, &.{ .{ .int = 0 }, .{ .int = 0 }, .{ .int = std.math.maxInt(i32) }, .{ .int = std.math.maxInt(i32) } });
     try c.request(st.surface, op.surface_commit, &.{});
     buf.busy = true;
+}
+
+/// Testing aid: where each control is, for a rig to click (`gui.writeDrawn`).
+/// Replaced whole (a temp file renamed), so a reader never sees half of it.
+fn writeControls(path: []const u8) void {
+    var out: std.Io.Writer.Allocating = .init(st.gpa);
+    defer out.deinit();
+    gui.writeDrawn(&app.ui, &out.writer) catch return;
+    const text = out.written();
+    const h = std.hash.Wyhash.hash(0, text);
+    if (h == st.controls_hash) return;
+    st.controls_hash = h;
+    var tmp_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const tmp = std.fmt.bufPrint(&tmp_buf, "{s}.tmp", .{path}) catch return;
+    const cwd = std.Io.Dir.cwd();
+    cwd.writeFile(st.io, .{ .sub_path = tmp, .data = text }) catch return;
+    cwd.rename(tmp, cwd, path, st.io) catch {}; // zsnag:ok — testing aid; the next frame tries again
 }
 
 fn makeBuffer(buf: *Buffer, width: u32, height: u32) !void {
@@ -869,7 +892,9 @@ pub fn drawOverlay() void {
             ui.stroke(r, 8, p.control_stroke, 1);
             for (m.items, 0..) |it, i| {
                 const ir: Rect = .{ .x = r.x + 4, .y = r.y + 4 + item_h * @as(f32, @floatFromInt(i)), .w = r.w - 8, .h = item_h };
+                ui.label = it;
                 const in = ui.interact(key("menu", i), ir);
+                ui.label = "";
                 if (in.hovered) ui.fill(ir, 4, p.subtle_hover);
                 ui.text(.{ .x = ir.x + 12, .y = ir.y, .w = ir.w - 24, .h = ir.h }, it, .body, .left, p.text);
                 if (in.clicked) {
@@ -1122,7 +1147,14 @@ pub fn showInFolder(path: []const u8) void {
 // ---- file pickers (the XDG FileChooser portal) ------------------------------------------
 
 pub fn pick(kind: app_mod.PickKind) void {
-    if (st.test_pick) |p| return app_mod.picked(kind, p);
+    if (st.test_pick) |p| {
+        // "@<file>": the answer is read from that file now, so a rig can
+        // give each picker its own.
+        if (p.len == 0 or p[0] != '@') return app_mod.picked(kind, p);
+        var buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+        const got = std.Io.Dir.cwd().readFile(st.io, p[1..], &buf) catch return app_mod.showToast("test pick: can't read its file");
+        return app_mod.picked(kind, std.mem.trim(u8, got, " \n"));
+    }
     const b = if (st.bus) |*x| x else return app_mod.showToast("no session bus: can't open a file picker");
     var buf: [2048]u8 = undefined;
     var w: dbus.Writer = .{ .buf = &buf };
