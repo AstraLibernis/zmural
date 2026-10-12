@@ -1,0 +1,17 @@
+{
+    "uuid": "org.zmural.gnome@zmural",
+    "name": "zmural",
+    "description": "Live wallpapers from zmural (display extension based on waywallen-display).",
+    "url": "https://github.com/AstraLibernis/zmural",
+    "version": @WW_GNOME_VERSION@,
+    "version-name": "@PROJECT_VERSION@",
+    "shell-version": [
+        "48",
+        "49",
+        "50",
+        "51"
+    ],
+    "settings-schema": "org.gnome.shell.extensions.zmural",
+    "gettext-domain": "zmural-gnome",
+    "session-modes": ["user", "unlock-dialog"]
+}

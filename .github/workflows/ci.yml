@@ -1,0 +1,361 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Builds zmural for each OS on that OS, runs the unit tests there, and starts
+# the real daemon to check that it comes up, answers the CLI and quits. On
+# Windows it also builds the release zip and runs zmural from it, unzipped
+# into an empty folder.
+#
+# When it runs (owner's decision, 2026-09-30): the repository is private, so
+# CI spends the account's Actions minutes, Windows ones twice as fast. It runs
+# only for a finished milestone or a major push, not on every push:
+# - by hand: Actions > CI > Run workflow;
+# - a pushed tag: v* (a release) or milestone-* (a finished milestone);
+# - a push to main whose last commit message contains [full ci].
+# Other pushes start it and every job is skipped, which costs nothing.
+# Linux is tested on real desktops by the owner, and on the headless rigs in
+# tools/ during development.
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*", "milestone-*"]
+
+permissions:
+  contents: read
+
+# Runs queue rather than cancel each other: most pushes start a run whose
+# jobs are all skipped, and it must not cancel a full run in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  ZIG_VERSION: 0.16.0
+
+jobs:
+  linux:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') || contains(github.event.head_commit.message, '[full ci]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Zig
+        run: |
+          curl -fsSL "https://ziglang.org/download/$ZIG_VERSION/zig-x86_64-linux-$ZIG_VERSION.tar.xz" | tar -xJ -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/zig-x86_64-linux-$ZIG_VERSION" >> "$GITHUB_PATH"
+      - name: Unit tests
+        run: zig build test --summary all
+      - name: Release build
+        run: zig build -Doptimize=ReleaseSafe --summary all
+      - name: Display codec against waywallen's C codec
+        run: zig build ww-codec-check -Dwaywallen-display=third_party/waywallen-display --summary all
+      - name: Windows cross-build compiles, tests included
+        run: zig build check -Dtarget=x86_64-windows
+      # A hosted runner has no GPU render node, which zmural needs, so here
+      # this only checks that zmural says so and exits. The full boot test
+      # (takeover, CLI, settings.toml edits) runs wherever a GPU exists.
+      - name: Boot test
+        run: tools/instance-test.sh
+
+  windows:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') || contains(github.event.head_commit.message, '[full ci]')
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Zig
+        shell: pwsh
+        run: |
+          $zip = "$env:RUNNER_TEMP\zig.zip"
+          Invoke-WebRequest "https://ziglang.org/download/$env:ZIG_VERSION/zig-x86_64-windows-$env:ZIG_VERSION.zip" -OutFile $zip
+          Expand-Archive $zip -DestinationPath $env:RUNNER_TEMP
+          "$env:RUNNER_TEMP\zig-x86_64-windows-$env:ZIG_VERSION" | Out-File -Append $env:GITHUB_PATH
+      - name: Unit tests
+        run: zig build test --summary all
+      - name: Release build
+        run: zig build -Doptimize=ReleaseSafe --summary all
+      # Zip import and export on Windows, against Windows' own zip writer and
+      # reader (Compress-Archive, .NET's ZipArchive, Expand-Archive). No
+      # zmural running: --to names the folder.
+      - name: Zip import and export (Windows' own zip tools as the other side)
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+          $con = (Resolve-Path "zig-out\bin\zmural-console.exe").Path
+          $t = "$env:RUNNER_TEMP\zip-test"; New-Item -ItemType Directory -Force "$t\src\Sunsets", "$t\lib" | Out-Null
+          [IO.File]::WriteAllBytes("$t\src\Sunsets\a.png", [byte[]](1..200))
+          [IO.File]::WriteAllBytes("$t\src\Sunsets\b.mp4", [byte[]](1..100 | ForEach-Object { $_ % 7 }))
+          Compress-Archive -Path "$t\src\Sunsets" -DestinationPath "$t\sunsets.zip"
+          $fail = @()
+          function Zip($name, $entries) {
+            $z = [IO.Compression.ZipFile]::Open("$t\$name", 'Create')
+            foreach ($e in $entries) { $w = New-Object IO.StreamWriter($z.CreateEntry($e[0]).Open()); $w.Write($e[1]); $w.Close() }
+            $z.Dispose()
+          }
+          # 1. A zip Windows made imports, without nesting; a second gets its own folder.
+          & $con import "$t\sunsets.zip" --to "$t\lib"; if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$t\lib\Sunsets\b.mp4") -or (Test-Path "$t\lib\Sunsets\Sunsets")) { $fail += "import of a Compress-Archive zip" }
+          & $con import "$t\sunsets.zip" --to "$t\lib"; if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$t\lib\Sunsets (2)\a.png")) { $fail += "second import as 'Sunsets (2)'" }
+          # 2. Our export, read back by Windows' own reader, is the same bytes.
+          & $con export "$t\lib\Sunsets" "$t\out.zip"; if ($LASTEXITCODE -ne 0) { $fail += "export" }
+          Expand-Archive "$t\out.zip" -DestinationPath "$t\back"
+          foreach ($f in "a.png", "b.mp4") {
+            if ((Get-FileHash "$t\back\Sunsets\$f").Hash -ne (Get-FileHash "$t\src\Sunsets\$f").Hash) { $fail += "export round trip of $f" }
+          }
+          # 3. Hostile names are refused and write nothing anywhere.
+          Zip "up.zip" @(,@("..\..\evil.txt", "x"))
+          Zip "drive.zip" @(,@("C:evil.mp4", "x"))
+          Zip "device.zip" @(,@("CON.mp4", "x"))
+          Zip "stream.zip" @(,@("rain.mp4:hidden", "x"))
+          $before = (Get-ChildItem -Recurse -Force $env:RUNNER_TEMP | Measure-Object).Count
+          foreach ($z in "up", "drive", "device", "stream") {
+            & $con import "$t\$z.zip" --to "$t\lib" 2>$null; if ($LASTEXITCODE -ne 1) { $fail += "$z.zip not refused (exit $LASTEXITCODE)" }
+          }
+          $after = (Get-ChildItem -Recurse -Force $env:RUNNER_TEMP | Measure-Object).Count
+          if ($after -ne $before -or (Test-Path "$env:RUNNER_TEMP\evil.txt") -or (Get-ChildItem -Force "$t\lib" -Filter ".zmural-import*")) { $fail += "a refused zip wrote something ($before -> $after files)" }
+          # 4. Lively: a video package is converted, a program refused.
+          Zip "lively.zip" @(@("LivelyInfo.json", '{"Title":"Sea","Type":7,"FileName":"sea.mp4",}'), @("sea.mp4", "x"))
+          & $con import "$t\lively.zip" --to "$t\lib"; if ($LASTEXITCODE -ne 0 -or -not (Select-String -Quiet "type = `"video`"" "$t\lib\lively\zmural.toml")) { $fail += "Lively video package" }
+          Zip "game.zip" @(@("LivelyInfo.json", '{"Type":0,"FileName":"game.exe"}'), @("game.exe", "MZ"))
+          & $con import "$t\game.zip" --to "$t\lib" 2>$null; if ($LASTEXITCODE -ne 1 -or (Test-Path "$t\lib\game")) { $fail += "Lively program package not refused" }
+          # 5. Without zmural and without --to there is nowhere known to put it.
+          & $con import "$t\sunsets.zip" 2>$null; if ($LASTEXITCODE -ne 3) { $fail += "no zmural, no --to: exit $LASTEXITCODE, not 3" }
+          # 6. A downloaded zip's mark (Mark of the Web) goes on every file unpacked
+          #    from it, so a program in it still warns when opened; an unmarked zip's files stay unmarked.
+          if (Get-Item "$t\lib\Sunsets\b.mp4" -Stream Zone.Identifier -ErrorAction SilentlyContinue) { $fail += "files of an unmarked zip were marked" }
+          Set-Content -Path "$t\sunsets.zip" -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
+          & $con import "$t\sunsets.zip" --to "$t\marked"
+          foreach ($f in "a.png", "b.mp4") {
+            if ($LASTEXITCODE -ne 0 -or -not (Get-Content "$t\marked\Sunsets\$f" -Stream Zone.Identifier -ErrorAction SilentlyContinue | Select-String -Quiet "ZoneId=3")) { $fail += "Mark of the Web not copied to $f" }
+          }
+          Get-ChildItem -Recurse "$t\lib" | Select-Object -ExpandProperty FullName
+          if ($fail.Count -gt 0) { $fail | ForEach-Object { Write-Host "FAIL $_" }; exit 1 }
+          Write-Host "zip import/export: all passed"
+          exit 0 # not the last command's code (the import above exits 3 on purpose)
+      - name: Boot test (zmural starts, the CLI reaches it, one monitor gets its own wallpaper, the settings window opens, it quits)
+        shell: pwsh
+        run: |
+          $env:ZMURAL_CONFIG_DIR = "$env:RUNNER_TEMP\zmural-cfg"
+          New-Item -ItemType Directory -Force $env:ZMURAL_CONFIG_DIR | Out-Null
+          $bin = "zig-out\bin"
+          $d = Start-Process "$bin\zmural.exe" -ArgumentList "--apply","test-pattern" -PassThru
+          $ok = $false
+          foreach ($i in 1..40) {
+            Start-Sleep -Milliseconds 500
+            & "$bin\zmural-console.exe" status *> "$env:RUNNER_TEMP\status.txt"
+            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+            if ($d.HasExited) { break }
+          }
+          Write-Host "--- zmural-console status"; Get-Content "$env:RUNNER_TEMP\status.txt"
+          $perMonitor = $true
+          $settingsOk = $true
+          if ($ok) {
+            & "$bin\zmural-console.exe" pause; & "$bin\zmural-console.exe" status | Select-String "paused"
+            # Per-monitor wallpapers, as far as one monitor and no libmpv allow:
+            # monitor 1 gets its own, the file records it, it follows again,
+            # and a monitor that isn't there is refused.
+            & "$bin\zmural-console.exe" apply test-pattern --monitor 1
+            $own = (& "$bin\zmural-console.exe" status | Select-String "DISPLAY" | Out-String)
+            Write-Host "--- monitors with monitor 1 on its own"; Write-Host $own
+            $file = Get-Content "$env:ZMURAL_CONFIG_DIR\settings.toml" | Select-String "^m-[0-9a-f]{16} = "
+            & "$bin\zmural-console.exe" fill fit --monitor 1
+            $fill = (& "$bin\zmural-console.exe" status | Select-String "fill: fit" | Out-String)
+            & "$bin\zmural-console.exe" fill default --monitor 1
+            & "$bin\zmural-console.exe" follow --monitor 1
+            $followed = (& "$bin\zmural-console.exe" status | Select-String "DISPLAY" | Out-String)
+            & "$bin\zmural-console.exe" apply test-pattern --monitor 9 2>$null
+            $refused = $LASTEXITCODE
+            if ($own -notmatch "test-pattern" -or -not $file -or -not $fill -or $followed -notmatch "main wallpaper" -or $followed -match "fill:" -or $refused -ne 1) {
+              $perMonitor = $false
+              Write-Host "own: $own`nfile: $file`nfill: $fill`nfollowed: $followed`nrefused: $refused"
+            }
+            # A plain picture's adjustments, daemon side (no libmpv here, so the
+            # renderer can't show it): listed, set, kept in a file, refused out of range.
+            $png = "$env:RUNNER_TEMP\pic.png"; Set-Content $png "not really a png"
+            & "$bin\zmural-console.exe" apply $png
+            $listed = (& "$bin\zmural-console.exe" props | Out-String)
+            & "$bin\zmural-console.exe" prop brightness -20
+            $kept = Get-ChildItem "$env:ZMURAL_CONFIG_DIR\properties" -Filter *.toml -ErrorAction SilentlyContinue | Get-Content | Select-String "brightness = -20"
+            & "$bin\zmural-console.exe" prop brightness 500 2>$null
+            $tooMuch = $LASTEXITCODE
+            Write-Host "--- props"; Write-Host $listed
+            if ($listed -notmatch "brightness" -or $listed -match "saturation" -or -not $kept -or $tooMuch -ne 1) {
+              $perMonitor = $false
+              Write-Host "props: $listed`nkept: $kept`nout of range: $tooMuch"
+            }
+            # A web address is never a wallpaper: refused with the reason, and
+            # the picture stays.
+            $why = (& "$bin\zmural-console.exe" apply https://example.com 2>&1 | Out-String)
+            $webRc = $LASTEXITCODE
+            $still = (& "$bin\zmural-console.exe" status | Out-String)
+            if ($webRc -ne 1 -or $why -notmatch "show web addresses" -or $still -notmatch "pic.png" -or $still -match "example.com") {
+              $perMonitor = $false
+              Write-Host "web address: rc $webRc`n$why`n$still"
+            }
+            # The settings window is a thread inside zmural: a second zmural
+            # asks for it, a second ask raises the one window, and zmural
+            # still quits cleanly with it open.
+            Start-Process "$bin\zmural.exe" -ArgumentList "--settings" -Wait
+            Start-Sleep -Seconds 3
+            Start-Process "$bin\zmural.exe" -ArgumentList "--settings" -Wait
+            Start-Sleep -Seconds 1
+            $log = (Get-Content "$env:ZMURAL_CONFIG_DIR\zmural.log" | Out-String)
+            if ($log -notmatch "window: open" -or $log -notmatch "window: already open" -or $log -match "closed by an error" -or $log -match "leaked" -or $d.HasExited) {
+              $settingsOk = $false
+            }
+            & "$bin\zmural-console.exe" quit
+            $d.WaitForExit(10000) | Out-Null
+          }
+          Write-Host "--- zmural.log"
+          Get-Content "$env:ZMURAL_CONFIG_DIR\zmural.log" -ErrorAction SilentlyContinue
+          if (-not $ok) { throw "zmural never answered the CLI" }
+          if (-not $perMonitor) { throw "per-monitor wallpapers, properties or the web-address refusal did not behave" }
+          if (-not $settingsOk) { throw "the settings window did not open inside zmural, or took it down" }
+          if (-not $d.HasExited) { $d.Kill(); throw "zmural did not quit" }
+          if ($d.ExitCode -ne 0) { throw "zmural exited with $($d.ExitCode)" }
+      # The release zip ships libmpv and WebView2's loader, which aren't in the
+      # repository: fetch the exact builds THIRD_PARTY_NOTICES.md names, and
+      # refuse anything whose hash differs.
+      - name: Fetch the pinned libmpv and WebView2 loader
+        shell: pwsh
+        run: |
+          $mpvUrl = "https://github.com/zhongfly/mpv-winbuild/releases/download/2026-09-26-a1bf4b6559/mpv-dev-lgpl-x86_64-20260926-git-a1bf4b6559.7z"
+          $mpvSha = "e37f712fbaae47e5140d66de7969fab65bbc68ce78435938b3fc7eed56033dc8"
+          $wvUrl = "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.4191.47"
+          $wvSha = "f492bbf547d0da329553b6727435b677579b1e9f91cc9e4a1ad029366d5f23d0"
+          $mpv = "$env:RUNNER_TEMP\mpv.7z"; $wv = "$env:RUNNER_TEMP\webview2.zip"
+          Invoke-WebRequest $mpvUrl -OutFile $mpv
+          Invoke-WebRequest $wvUrl -OutFile $wv
+          if ((Get-FileHash $mpv -Algorithm SHA256).Hash -ne $mpvSha) { throw "libmpv archive hash differs" }
+          if ((Get-FileHash $wv -Algorithm SHA256).Hash -ne $wvSha) { throw "WebView2 package hash differs" }
+          New-Item -ItemType Directory -Force third_party\mpv, third_party\webview2 | Out-Null
+          7z e $mpv libmpv-2.dll -othird_party\mpv -y | Out-Null
+          "Source: $mpvUrl`nSHA-256 of the archive: $mpvSha`nmpv commit: a1bf4b6559 (LGPL build, -Dgpl=false)" | Out-File -Encoding utf8 third_party\mpv\SOURCE.txt
+          Expand-Archive $wv -DestinationPath "$env:RUNNER_TEMP\webview2"
+          Copy-Item "$env:RUNNER_TEMP\webview2\build\native\x64\WebView2Loader.dll" third_party\webview2\
+          Copy-Item "$env:RUNNER_TEMP\webview2\LICENSE.txt", "$env:RUNNER_TEMP\webview2\NOTICE.txt" third_party\webview2\
+          "Source: $wvUrl (Microsoft.Web.WebView2 1.0.4191.47, build/native/x64)`nSHA-256 of the package: $wvSha" | Out-File -Encoding utf8 third_party\webview2\SOURCE.txt
+          Get-ChildItem third_party\mpv, third_party\webview2 | Format-Table Name, Length
+      - name: Release package (the zip)
+        run: zig build package -Doptimize=ReleaseSafe -Dtarget=x86_64-windows --summary all
+      - name: The zip as a user gets it (unzipped into an empty folder, then run)
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem zig-out\package\zmural-*-windows-x86_64.zip | Select-Object -First 1
+          $name = $zip.BaseName
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $entries = [System.IO.Compression.ZipFile]::OpenRead($zip.FullName).Entries | ForEach-Object { $_.FullName }
+          Write-Host "--- $($zip.Name), $([math]::Round($zip.Length / 1MB, 1)) MB"; $entries | ForEach-Object { Write-Host "  $_" }
+          $problems = @()
+          foreach ($want in "zmural.exe", "zmural-console.exe", "libmpv-2.dll", "WebView2Loader.dll", "README.txt", "LICENSE.txt", "THIRD_PARTY_NOTICES.md", "licenses/LGPL-2.1.txt", "licenses/LGPL-3.0.txt", "licenses/Zig-LICENSE.txt", "licenses/libmpv-credits.txt", "licenses/libmpv-SOURCE.txt") {
+            if (-not ($entries -contains "$name/$want")) { $problems += "missing from the zip: $want" }
+          }
+          if ($entries -match '\.pdb$') { $problems += "debugging info (.pdb) is in the zip" }
+          foreach ($pdb in "zmural.pdb", "zmural-console.pdb") {
+            if (-not (Test-Path "zig-out\package\debug\$name\$pdb")) { $problems += "not kept beside the zip: $pdb" }
+          }
+
+          # Unzip somewhere new and run it from there, as a user would.
+          $dir = "$env:RUNNER_TEMP\user"; Expand-Archive $zip.FullName -DestinationPath $dir
+          $bin = "$dir\$name"
+          $env:ZMURAL_CONFIG_DIR = "$env:RUNNER_TEMP\user-cfg"; New-Item -ItemType Directory -Force $env:ZMURAL_CONFIG_DIR | Out-Null
+          $png = "$env:RUNNER_TEMP\red.png"
+          [IO.File]::WriteAllBytes($png, [Convert]::FromBase64String("iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAQMAAAAlPW0iAAAAA1BMVEX/AAAZ4gk3AAAADElEQVQI12NgIA0AAAAwAAHHqoWOAAAAAElFTkSuQmCC"))
+          $d = Start-Process "$bin\zmural.exe" -ArgumentList "--apply", $png -PassThru
+          $up = $false
+          foreach ($i in 1..40) {
+            Start-Sleep -Milliseconds 500
+            & "$bin\zmural-console.exe" status *> "$env:RUNNER_TEMP\user-status.txt"
+            if ($LASTEXITCODE -eq 0) { $up = $true; break }
+            if ($d.HasExited) { break }
+          }
+          Start-Sleep -Seconds 4
+          if (-not $up) { $problems += "zmural from the zip never answered zmural-console" }
+          elseif (-not (Select-String -Path "$env:RUNNER_TEMP\user-status.txt" -Pattern "red.png" -Quiet)) { $problems += "the picture isn't what zmural shows" }
+          & "$bin\zmural.exe" --settings; Start-Sleep -Seconds 3
+          & "$bin\zmural-console.exe" quit; $d.WaitForExit(10000) | Out-Null
+          $log = (Get-Content "$env:ZMURAL_CONFIG_DIR\zmural.log" -ErrorAction SilentlyContinue | Out-String)
+          Write-Host "--- zmural.log (from the zip)"; Write-Host $log
+          if ($log -notmatch "libmpv") { $problems += "the renderer never reached libmpv" }
+          if ($log -match "could not be loaded|cannot start playback|cannot play|leaked") { $problems += "the log shows a failure (see above)" }
+          if ($log -notmatch "window: open") { $problems += "the settings window didn't open" }
+          if (-not $d.HasExited) { $d.Kill(); $problems += "zmural from the zip did not quit" }
+          elseif ($d.ExitCode -ne 0) { $problems += "zmural from the zip exited with $($d.ExitCode)" }
+
+          # A crash lands in zmural.log (made on purpose).
+          $env:ZMURAL_TEST_CRASH = "zmural:panic"
+          $c = Start-Process "$bin\zmural.exe" -PassThru; $c.WaitForExit(15000) | Out-Null
+          Remove-Item Env:ZMURAL_TEST_CRASH
+          $log = (Get-Content "$env:ZMURAL_CONFIG_DIR\zmural.log" -ErrorAction SilentlyContinue | Out-String)
+          if ($log -notmatch "CRASH: zmural .*\(zmural, pid \d+\): panic: a test crash") { $problems += "a crash didn't reach zmural.log" }
+          if ($log -notmatch "(?m)^    at 0x") { $problems += "the crash in zmural.log has no addresses" }
+
+          # The uninstaller removes zmural's own files and nothing else.
+          $u = Start-Process "$bin\zmural-console.exe" -ArgumentList "uninstall", "--yes" -PassThru -Wait -NoNewWindow
+          if ($u.ExitCode -ne 0) { $problems += "zmural-console uninstall exited with $($u.ExitCode)" }
+          if (Test-Path $env:ZMURAL_CONFIG_DIR) { $problems += "the uninstaller left zmural's settings and log" }
+          if (-not (Test-Path $png)) { $problems += "the uninstaller removed a wallpaper" }
+          if (-not (Test-Path "$bin\zmural.exe")) { $problems += "the uninstaller removed the program itself" }
+          if ($problems.Count -gt 0) { $problems | ForEach-Object { Write-Host "PROBLEM: $_" }; throw "the release zip did not behave" }
+          Write-Host "the release zip behaves"
+      # As a real user: no test folder, so zmural sets up start at login,
+      # the Start menu and Settings > Apps itself. Start with Windows is on
+      # from the first run; off is a "disabled" mark under StartupApproved
+      # (as Task Manager writes it) and is still off after a restart; the
+      # uninstaller removes both registry values.
+      - name: Start with Windows, as a real first run
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem zig-out\package\zmural-*-windows-x86_64.zip | Select-Object -First 1
+          $bin = "$env:RUNNER_TEMP\real\$($zip.BaseName)"; Expand-Archive $zip.FullName -DestinationPath "$env:RUNNER_TEMP\real"
+          $run = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+          $approved = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"
+          function RunValue { (Get-ItemProperty -Path $run -Name zmural -ErrorAction SilentlyContinue).zmural }
+          function Approved { (Get-ItemProperty -Path $approved -Name zmural -ErrorAction SilentlyContinue).zmural }
+          function Up {
+            foreach ($i in 1..40) { Start-Sleep -Milliseconds 500; & "$bin\zmural-console.exe" status *> $null; if ($LASTEXITCODE -eq 0) { return $true } }
+            return $false
+          }
+          $problems = @()
+          if (RunValue) { $problems += "the runner already had a zmural Run value" }
+          $png = "$env:RUNNER_TEMP\red.png"
+          $d = Start-Process "$bin\zmural.exe" -ArgumentList "--apply", $png -PassThru
+          if (-not (Up)) { $problems += "zmural never answered (first run)" }
+          Start-Sleep -Seconds 2
+          $want = "`"$bin\zmural.exe`""
+          if ((RunValue) -ne $want) { $problems += "after a first run the Run value is '$(RunValue)', not '$want'" }
+          if (Approved) { $problems += "a first run left a StartupApproved mark" }
+          $st = (& "$bin\zmural-console.exe" autostart status | Out-String)
+          if ($st -notmatch "^on: ") { $problems += "autostart status after a first run: $st" }
+
+          & "$bin\zmural-console.exe" autostart off | Out-Null
+          $a = Approved
+          if (-not (RunValue)) { $problems += "off deleted the Run value (it should stay, marked disabled)" }
+          if (-not $a -or $a.Length -ne 12 -or $a[0] -ne 3) { $problems += "off didn't write a disabled StartupApproved record: $a" }
+          $st = (& "$bin\zmural-console.exe" autostart status | Out-String)
+          if ($st -notmatch "^off") { $problems += "autostart status after off: $st" }
+          & "$bin\zmural-console.exe" quit; $d.WaitForExit(10000) | Out-Null
+
+          # A restart leaves "off" alone.
+          $d = Start-Process "$bin\zmural.exe" -PassThru
+          if (-not (Up)) { $problems += "zmural never answered (second run)" }
+          Start-Sleep -Seconds 2
+          $st = (& "$bin\zmural-console.exe" autostart status | Out-String)
+          if ($st -notmatch "^off") { $problems += "a restart turned start at login back on: $st" }
+          & "$bin\zmural-console.exe" autostart on | Out-Null
+          if (Approved) { $problems += "on didn't clear the disabled mark" }
+          & "$bin\zmural-console.exe" quit; $d.WaitForExit(10000) | Out-Null
+          $log = (Get-Content "$env:LOCALAPPDATA\zmural\zmural.log" -ErrorAction SilentlyContinue | Out-String)
+          Write-Host "--- zmural.log (real first run)"; Write-Host $log
+          if ($log -notmatch "autostart: on \(") { $problems += "the first run didn't log turning start at login on" }
+          if ($log -notmatch "autostart: off") { $problems += "the second run didn't log start at login as off" }
+
+          & "$bin\zmural-console.exe" autostart off | Out-Null
+          $u = Start-Process "$bin\zmural-console.exe" -ArgumentList "uninstall", "--yes" -PassThru -Wait -NoNewWindow
+          if ($u.ExitCode -ne 0) { $problems += "uninstall exited with $($u.ExitCode)" }
+          if (RunValue) { $problems += "uninstall left the Run value" }
+          if (Approved) { $problems += "uninstall left the StartupApproved mark" }
+          if (Test-Path "$env:APPDATA\zmural") { $problems += "uninstall left %APPDATA%\zmural" }
+          if ($problems.Count -gt 0) { $problems | ForEach-Object { Write-Host "PROBLEM: $_" }; throw "start with Windows did not behave" }
+          Write-Host "start with Windows behaves"
+          exit 0

@@ -1,0 +1,180 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 1970-01-01 00:00+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: extensions/gnome/extension/prefs.js:23
+msgid "Display"
+msgstr ""
+
+#: extensions/gnome/extension/prefs.js:27
+msgid "Display name"
+msgstr ""
+
+#: extensions/gnome/extension/prefs.js:35
+msgid "Instance id"
+msgstr ""
+
+#: extensions/gnome/extension/prefs.js:36
+msgid "(not generated yet)"
+msgstr ""
+
+#: extensions/gnome/extension/prefs.js:40
+msgid "Regenerate"
+msgstr ""
+
+#: extensions/gnome/extension/prefs.js:52
+msgid "Overview"
+msgstr ""
+
+#: extensions/gnome/extension/prefs.js:56
+msgid "Show wallpaper behind overview"
+msgstr ""
+
+#: extensions/gnome/extension/prefs.js:58
+msgid "Turn off to keep GNOME's solid frame around workspaces and the app grid."
+msgstr ""
+
+#: extensions/gnome/extension/prefs.js:65
+msgid "Blur overview background"
+msgstr ""
+
+#: extensions/gnome/extension/prefs.js:66
+msgid "Frosted-glass blur over the overview wallpaper."
+msgstr ""
+
+#: extensions/gnome/extension/prefs.js:73
+msgid "Overview blur strength"
+msgstr ""
+
+#: extensions/gnome/extension/prefs.js:74
+msgid "Blur radius in pixels (higher is blurrier)."
+msgstr ""
+
+#: extensions/gnome/extension/prefs.js:96
+msgid "Pairs well with Blur my Shell"
+msgstr ""
+
+#: extensions/gnome/extension/prefs.js:97
+msgid "For the full frosted-glass look, install Blur my Shell — it also blurs the panel, dash and application windows, and coexists with this extension."
+msgstr ""
+
+#: extensions/gnome/extension/prefs.js:108
+msgid "Advanced"
+msgstr ""
+
+#: extensions/gnome/extension/prefs.js:112
+msgid "Show diagnostics overlay"
+msgstr ""
+
+#: extensions/gnome/extension/prefs.js:113
+msgid "Overlay resolution / fps / window-state on the wallpaper (dev only)."
+msgstr ""
+
+#: extensions/gnome/extension/schemas/org.gnome.shell.extensions.zmural.gschema.xml:7
+msgid "Stable per-display UUID"
+msgstr ""
+
+#: extensions/gnome/extension/schemas/org.gnome.shell.extensions.zmural.gschema.xml:8
+msgid "UUID v4 generated on first enable and persisted forever. Used as the per-display settings key on the daemon side; survives renames, GPU swaps, and DE restarts."
+msgstr ""
+
+#: extensions/gnome/extension/schemas/org.gnome.shell.extensions.zmural.gschema.xml:17
+msgid "Human-readable display name reported to the daemon"
+msgstr ""
+
+#: extensions/gnome/extension/schemas/org.gnome.shell.extensions.zmural.gschema.xml:22
+msgid "Overlay connection / resolution / window-state on the wallpaper"
+msgstr ""
+
+#: extensions/gnome/extension/schemas/org.gnome.shell.extensions.zmural.gschema.xml:27
+msgid "Show the wallpaper behind the overview"
+msgstr ""
+
+#: extensions/gnome/extension/schemas/org.gnome.shell.extensions.zmural.gschema.xml:28
+msgid "Show the live wallpaper behind the overview and app grid. Disable this option to keep GNOME's original solid overview background."
+msgstr ""
+
+#: extensions/gnome/extension/schemas/org.gnome.shell.extensions.zmural.gschema.xml:36
+msgid "Blur the overview background"
+msgstr ""
+
+#: extensions/gnome/extension/schemas/org.gnome.shell.extensions.zmural.gschema.xml:37
+msgid "Apply a gaussian blur to the overview background wallpaper, like Blur my Shell does for the static wallpaper. Pairs well with Blur my Shell (the two are z-ordered to coexist), but does not require it."
+msgstr ""
+
+#: extensions/gnome/extension/schemas/org.gnome.shell.extensions.zmural.gschema.xml:47
+msgid "Overview background blur radius"
+msgstr ""
+
+#: extensions/gnome/extension/schemas/org.gnome.shell.extensions.zmural.gschema.xml:48
+msgid "Gaussian blur radius (in pixels) for the overview background. Higher is blurrier. 0 effectively disables the blur even when it is on."
+msgstr ""
+
+#: extensions/gnome/po/metadata.js:2
+msgid "Wallpaper plugin for the waywallen daemon."
+msgstr ""
+
+#: extensions/gnome/renderer/renderer.js:203
+msgid "active"
+msgstr ""
+
+#: extensions/gnome/renderer/renderer.js:203
+msgid "win"
+msgstr ""
+
+#: extensions/gnome/renderer/renderer.js:204
+msgid "full"
+msgstr ""
+
+#: extensions/gnome/renderer/renderer.js:204
+msgid "max"
+msgstr ""
+
+#: extensions/gnome/renderer/renderer.js:204
+msgid "none"
+msgstr ""
+
+#: extensions/gnome/renderer/renderer.js:206
+#, javascript-format
+msgid "mon %d  %s"
+msgstr ""
+
+#: extensions/gnome/renderer/renderer.js:207
+#, javascript-format
+msgid "id %s"
+msgstr ""
+
+#: extensions/gnome/renderer/renderer.js:208
+#, javascript-format
+msgid "disp %dx%d scale=%s"
+msgstr ""
+
+#: extensions/gnome/renderer/renderer.js:209
+#, javascript-format
+msgid "tex %dx%d fourcc=0x%s backend=%s"
+msgstr ""
+
+#: extensions/gnome/renderer/renderer.js:211
+#, javascript-format
+msgid "fps %s  frames %d"
+msgstr ""
+
+#: extensions/gnome/renderer/renderer.js:212
+#, javascript-format
+msgid "winstate 0x%s (%s)"
+msgstr ""

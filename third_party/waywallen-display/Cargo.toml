@@ -1,0 +1,64 @@
+[package]
+name = "waywallen-display"
+version = "0.4.1"
+edition = "2021"
+license = "MIT"
+description = "Low-level FFI bindings for libwaywallen_display"
+repository = "https://github.com/waywallen/waywallen-display"
+links = "waywallen_display"
+build = "build.rs"
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = ["egl", "vulkan", "layer-shell"]
+egl = []
+vulkan = []
+layer-shell = [
+    "dep:ash",
+    "dep:anyhow",
+    "dep:thiserror",
+    "dep:env_logger",
+    "dep:gettext-rs",
+    "dep:libc",
+    "dep:log",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:wayland-client",
+    "dep:wayland-protocols",
+    "dep:wayland-protocols-wlr",
+    "dep:wayland-scanner",
+    "dep:wayland-backend",
+    "dep:niri-ipc",
+    "dep:md-5",
+    "dep:wildmatch",
+]
+
+[dependencies]
+ash = { version = "0.38", optional = true }
+anyhow = { version = "1.0", optional = true }
+thiserror = { version = "2.0.18", optional = true }
+env_logger = { version = "0.10", optional = true }
+gettext-rs = { version = "0.7", features = ["gettext-system"], optional = true }
+libc = { version = "0.2", optional = true }
+log = { version = "0.4", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
+wayland-client = { version = "0.31", features = ["system"], optional = true }
+wayland-protocols = { version = "0.32", features = ["client", "unstable", "staging"], optional = true }
+wayland-protocols-wlr = { version = "0.3", features = ["client"], optional = true }
+wayland-scanner = { version = "0.31", optional = true }
+wayland-backend = { version = "0.3", default-features = false, optional = true }
+niri-ipc = { version = "26.4.0", optional = true }
+md-5 = { version = "0.10", optional = true }
+wildmatch = { version = "2.6.1", optional = true }
+
+[build-dependencies]
+cc = "1"
+pkg-config = "0.3"
+
+[[bin]]
+name = "waywallen-layer-shell"
+path = "src/bin/layer_shell/main.rs"
+required-features = ["layer-shell"]

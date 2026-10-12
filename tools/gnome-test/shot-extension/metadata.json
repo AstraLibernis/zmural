@@ -1,0 +1,7 @@
+{
+    "uuid": "zmural-test-shot@local",
+    "name": "zmural test screenshots",
+    "description": "Test-only: writes a screenshot every few seconds to $ZMURAL_SHOT_DIR.",
+    "shell-version": ["48", "49", "50"],
+    "session-modes": ["user"]
+}

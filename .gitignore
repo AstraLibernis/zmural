@@ -1,0 +1,13 @@
+.zig-cache/
+zig-out/
+
+# Upstream projects kept locally for study only; never part of zmural.
+reference/
+
+# Third-party runtime binaries (e.g. libmpv) fetched locally, never committed.
+third_party/*
+# Vendored source that is part of zmural (tools/vendor-waywallen-display.sh).
+!third_party/waywallen-display/
+# Local test media.
+media/
+__pycache__/

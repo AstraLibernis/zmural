@@ -1,0 +1,284 @@
+// Top-level GNOME Shell extension for org.zmural.gnome.
+//
+// Lifecycle:
+//   enable()  — install monkey-patches, generate instance-id if needed,
+//               spawn renderer, hook background-actor injection.
+//   disable() — undo patches, terminate renderer, clean up.
+//
+// Multiple instances of the renderer are NOT spawned — one process
+// handles all monitors via per-monitor windows.
+
+import GLib from 'gi://GLib';
+import Gio from 'gi://Gio';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
+
+import {GnomeShellOverride} from './gnomeShellOverride.js';
+import {LaunchSubprocess} from './launcher.js';
+import {WindowManager} from './windowManager.js';
+import {PointerForwarder} from './pointerForwarder.js';
+import {WindowStateMonitor} from './windowState.js';
+
+const DAEMON_BUS_NAME  = 'org.zmural.Daemon';
+const DAEMON_OBJ_PATH  = '/org/zmural/Daemon';
+const DAEMON_IFACE     = 'org.zmural.Daemon1';
+const DAEMON_READY_SIG = 'Ready';
+const RESPAWN_INITIAL_DELAY_MS = 2000;
+const RESPAWN_MAX_DELAY_MS     = 30000;
+const RESPAWN_STABLE_TIME_US   = 20 * 1000 * 1000;
+
+function generateUuidV4() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.floor(Math.random() * 16);
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+    });
+}
+
+export default class WaywallenExtension extends Extension {
+    constructor(metadata) {
+        super(metadata);
+        this._isEnabled = false;
+        this._currentProc = null;
+        this._respawnId = 0;
+        this._respawnDelayMs = RESPAWN_INITIAL_DELAY_MS;
+        // Bus state — set by the bus watcher; reset on disable.
+        this._daemonUp = false;
+        this._busWatchId = 0;
+        this._readySigId = 0;
+    }
+
+    enable() {
+        this._settings = this.getSettings();
+
+        if (!this._settings.get_string('instance-id')) {
+            this._settings.set_string('instance-id', generateUuidV4());
+            // Persist immediately; gschema flushes lazily otherwise.
+            this._settings.apply();
+        }
+
+        this._override = new GnomeShellOverride(this._settings);
+
+        // Defer renderer spawn + override install until shell startup
+        // animation is past, so we don't fight Main.layoutManager's
+        // initial background pass.
+        if (Main.layoutManager._startingUp) {
+            this._startupSignalId = Main.layoutManager.connect(
+                'startup-complete', () => this._innerEnable());
+        } else {
+            this._idleId = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                this._idleId = 0;
+                this._innerEnable();
+                return GLib.SOURCE_REMOVE;
+            });
+        }
+        this._isEnabled = true;
+    }
+
+    _innerEnable() {
+        if (this._startupSignalId) {
+            Main.layoutManager.disconnect(this._startupSignalId);
+            this._startupSignalId = 0;
+        }
+        if (!this._isEnabled)
+            return;
+        this._override.enable();
+        this._windowMgr = new WindowManager();
+        this._windowMgr.enable();
+        this._pointer = new PointerForwarder();
+        this._pointer.enable();
+        this._winState = new WindowStateMonitor();
+        this._winState.enable();
+        this._watchDaemon();
+    }
+
+    _watchDaemon() {
+        const bus = Gio.DBus.session;
+        this._busWatchId = Gio.bus_watch_name(
+            Gio.BusType.SESSION, DAEMON_BUS_NAME,
+            Gio.BusNameWatcherFlags.NONE,
+            () => this._onDaemonAppeared(),
+            () => this._onDaemonVanished());
+        this._readySigId = bus.signal_subscribe(
+            DAEMON_BUS_NAME, DAEMON_IFACE, DAEMON_READY_SIG, DAEMON_OBJ_PATH,
+            null, Gio.DBusSignalFlags.NONE,
+            () => this._onDaemonReady());
+    }
+
+    _onDaemonAppeared() {
+        log('[zmural] daemon appeared on session bus');
+        this._daemonUp = true;
+        this._override?.setRendererAvailable(false);
+        this._respawnDelayMs = RESPAWN_INITIAL_DELAY_MS;
+        if (this._isEnabled && !this._currentProc)
+            this._spawnRenderer();
+    }
+
+    _onDaemonVanished() {
+        log('[zmural] daemon vanished from session bus');
+        this._daemonUp = false;
+        this._override?.setRendererAvailable(false);
+        this._override?.setRendererLauncher(null);
+        if (this._respawnId) {
+            GLib.source_remove(this._respawnId);
+            this._respawnId = 0;
+        }
+        if (this._currentProc) {
+            this._currentProc.cancellable?.cancel();
+            this._currentProc.subprocess?.send_signal(15);
+            this._currentProc = null;
+        }
+        this._override?.resetPresentation();
+    }
+
+    _onDaemonReady() {
+        log('[zmural] daemon Ready signal');
+        this._daemonUp = true;
+        if (this._isEnabled && !this._currentProc) {
+            if (this._respawnId) {
+                GLib.source_remove(this._respawnId);
+                this._respawnId = 0;
+            }
+            this._respawnDelayMs = RESPAWN_INITIAL_DELAY_MS;
+            this._spawnRenderer();
+        }
+    }
+
+    _spawnRenderer() {
+        if (!this._daemonUp || this._currentProc)
+            return;
+
+        const rendererPath =
+            GLib.build_filenamev([this.path, 'renderer', 'renderer.js']);
+        const argv = [
+            rendererPath,
+            '--instance-id',   this._settings.get_string('instance-id'),
+            '--display-name',  this._settings.get_string('display-name'),
+        ];
+        this._override?.setRendererAvailable(false);
+        this._override?.setRendererLauncher(null);
+        if (this._settings.get_boolean('show-diagnostics'))
+            argv.push('--diagnostics');
+
+        this._currentProc = new LaunchSubprocess();
+        const proc = this._currentProc;
+        const startedAtUs = GLib.get_monotonic_time();
+        proc.setControlHandler(frame => {
+            if (this._currentProc !== proc || !this._override)
+                return;
+            if (frame.type === 'window-observation-config') {
+                this._winState?.applyConfig(frame.geometry, frame.config);
+                return;
+            }
+            if (frame.type === 'reset') this._winState?.resetConfig(frame.geometry);
+            const applied = this._override.applyControlFrame(frame);
+            if (applied && frame.type === 'reset')
+                this._override.setRendererAvailable(false);
+            if (applied && frame.type === 'connection') {
+                this._override.setRendererAvailable(true);
+                const g = frame.geometry;
+                proc.writeStdin(
+                    `R ${g.x} ${g.y} ${frame.presentation.config.generation}\n`);
+            }
+        });
+        this._currentProc.set_cwd(GLib.get_home_dir());
+
+        const bundleLib     = GLib.build_filenamev([this.path, 'lib']);
+        const bundleTypelib = GLib.build_filenamev([bundleLib, 'girepository-1.0']);
+        if (GLib.file_test(bundleTypelib, GLib.FileTest.IS_DIR))
+            this._currentProc.prepend_env('GI_TYPELIB_PATH', bundleTypelib);
+        if (GLib.file_test(bundleLib, GLib.FileTest.IS_DIR))
+            this._currentProc.prepend_env('LD_LIBRARY_PATH', bundleLib);
+        const localeDir = GLib.build_filenamev([this.path, 'locale']);
+        if (GLib.file_test(localeDir, GLib.FileTest.IS_DIR))
+            this._currentProc.set_env('WAYWALLEN_LOCALEDIR', localeDir);
+        this._currentProc.set_env('GTK_A11Y', 'none');
+
+        this._currentProc.spawnv(argv);
+        this._override?.setRendererLauncher(this._currentProc);
+        this._windowMgr?.setLauncher(this._currentProc);
+        this._pointer?.setLauncher(this._currentProc);
+        this._winState?.setLauncher(this._currentProc);
+
+        proc.subprocess?.wait_async(null, (subprocess, res) => {
+            try {
+                subprocess.wait_finish(res);
+            } catch (_e) { /* cancelled is fine */ }
+            if (this._currentProc !== proc)
+                return;
+            this._currentProc = null;
+            this._override?.setRendererAvailable(false);
+            this._override?.setRendererLauncher(null);
+            this._override?.resetPresentation();
+            if (!this._isEnabled || !this._daemonUp)
+                return;
+            const livedUs = GLib.get_monotonic_time() - startedAtUs;
+            if (livedUs >= RESPAWN_STABLE_TIME_US)
+                this._respawnDelayMs = RESPAWN_INITIAL_DELAY_MS;
+            const delayMs = this._respawnDelayMs;
+            this._respawnDelayMs = Math.min(delayMs * 2, RESPAWN_MAX_DELAY_MS);
+            log(`[zmural] renderer exited after ${Math.round(livedUs / 1000)} ms; ` +
+                `respawning in ${delayMs} ms`);
+            this._scheduleRespawn(delayMs);
+        });
+    }
+
+    _scheduleRespawn(delayMs) {
+        if (this._respawnId)
+            return;
+        this._respawnId = GLib.timeout_add(GLib.PRIORITY_DEFAULT,
+            delayMs, () => {
+                this._respawnId = 0;
+                if (this._isEnabled && this._daemonUp)
+                    this._spawnRenderer();
+                return GLib.SOURCE_REMOVE;
+            });
+    }
+
+    disable() {
+        this._isEnabled = false;
+        if (this._startupSignalId) {
+            Main.layoutManager.disconnect(this._startupSignalId);
+            this._startupSignalId = 0;
+        }
+        if (this._idleId) {
+            GLib.source_remove(this._idleId);
+            this._idleId = 0;
+        }
+        if (this._respawnId) {
+            GLib.source_remove(this._respawnId);
+            this._respawnId = 0;
+        }
+        if (this._busWatchId) {
+            Gio.bus_unwatch_name(this._busWatchId);
+            this._busWatchId = 0;
+        }
+        if (this._readySigId) {
+            Gio.DBus.session.signal_unsubscribe(this._readySigId);
+            this._readySigId = 0;
+        }
+        this._daemonUp = false;
+        if (this._currentProc) {
+            this._currentProc.cancellable?.cancel();
+            this._currentProc.subprocess?.send_signal(15);
+            this._currentProc = null;
+        }
+        if (this._override) {
+            this._override.disable();
+            this._override = null;
+        }
+        if (this._windowMgr) {
+            this._windowMgr.disable();
+            this._windowMgr = null;
+        }
+        if (this._pointer) {
+            this._pointer.disable();
+            this._pointer = null;
+        }
+        if (this._winState) {
+            this._winState.disable();
+            this._winState = null;
+        }
+        this._settings = null;
+    }
+}

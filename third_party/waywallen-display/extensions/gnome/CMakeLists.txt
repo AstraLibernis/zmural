@@ -1,0 +1,138 @@
+# GNOME Shell extension package — produces a flat zip whose root
+# contains metadata.json + the extension JS + a `renderer/` subdir.
+# Layout matches what `gnome-extensions install <foo.zip>` expects.
+#
+# Schema is shipped inside the zip (`schemas/<id>.gschema.xml`) and
+# also installed system-wide so end-users running `cmake --install`
+# can use it without per-user post-processing.
+
+set(WW_GNOME_UUID "org.zmural.gnome@zmural")
+# EGO requires the org.gnome.shell.extensions.* base for both id and path.
+set(WW_GNOME_SCHEMA_ID "org.gnome.shell.extensions.zmural")
+set(WW_GNOME_GETTEXT_DOMAIN "zmural-gnome")
+
+# GNOME extension `version`: a monotonic integer the Shell / EGO compare on
+# (semver doesn't fit here). Bump by 1 every released extension change,
+# independent of the repo's PROJECT_VERSION (which goes into version-name).
+set(WW_GNOME_VERSION 3)
+
+# Generate metadata.json with the version + project version stamped in.
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/extension/metadata.json.in
+    ${CMAKE_CURRENT_BINARY_DIR}/metadata.json
+    @ONLY)
+
+find_program(MSGFMT_EXECUTABLE msgfmt REQUIRED)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/po/LINGUAS" _ww_gnome_languages
+    REGEX "^[A-Za-z_@.-]+$")
+set(_ww_gnome_mo_files "")
+foreach(_lang IN LISTS _ww_gnome_languages)
+    set(_po "${CMAKE_CURRENT_SOURCE_DIR}/po/${_lang}.po")
+    set(_mo "${CMAKE_CURRENT_BINARY_DIR}/locale/${_lang}/LC_MESSAGES/${WW_GNOME_GETTEXT_DOMAIN}.mo")
+    add_custom_command(
+        OUTPUT "${_mo}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/locale/${_lang}/LC_MESSAGES"
+        COMMAND ${MSGFMT_EXECUTABLE} --check --check-format -o "${_mo}" "${_po}"
+        DEPENDS "${_po}"
+        COMMENT "Compiling ${WW_GNOME_GETTEXT_DOMAIN} ${_lang} translation"
+        VERBATIM)
+    list(APPEND _ww_gnome_mo_files "${_mo}")
+    install(FILES "${_mo}"
+        DESTINATION "locale/${_lang}/LC_MESSAGES"
+        COMPONENT gnome_extension
+        EXCLUDE_FROM_ALL)
+    install(FILES "${_mo}"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/gnome-shell/extensions/${WW_GNOME_UUID}/locale/${_lang}/LC_MESSAGES")
+    install(FILES "${_mo}"
+        DESTINATION "${CMAKE_INSTALL_LOCALEDIR}/${_lang}/LC_MESSAGES")
+endforeach()
+add_custom_target(zmural-gnome-translations ALL DEPENDS ${_ww_gnome_mo_files})
+
+# --- Component install (cpack zip) ----------------------------------------
+
+set(_ext_files
+    ${CMAKE_CURRENT_BINARY_DIR}/metadata.json
+    extension/extension.js
+    extension/launcher.js
+    extension/controlCodec.js
+    extension/blur.js
+    extension/gnomeShellOverride.js
+    extension/wallpaper.js
+    extension/windowManager.js
+    extension/pointerForwarder.js
+    extension/windowState.js
+    extension/windowExclusions.js
+    extension/prefs.js
+)
+
+install(FILES ${_ext_files}
+    DESTINATION "."
+    COMPONENT gnome_extension
+    EXCLUDE_FROM_ALL)
+
+install(FILES extension/schemas/${WW_GNOME_SCHEMA_ID}.gschema.xml
+    DESTINATION "schemas"
+    COMPONENT gnome_extension
+    EXCLUDE_FROM_ALL)
+
+# Pre-compile the schema — a directly-unzipped install needs gschemas.compiled.
+find_program(GLIB_COMPILE_SCHEMAS glib-compile-schemas REQUIRED)
+set(_ww_schema_stage "${CMAKE_CURRENT_BINARY_DIR}/schemas-stage")
+set(_ww_compiled_schema "${_ww_schema_stage}/gschemas.compiled")
+add_custom_command(
+    OUTPUT  ${_ww_compiled_schema}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${_ww_schema_stage}
+    COMMAND ${CMAKE_COMMAND} -E copy
+            ${CMAKE_CURRENT_SOURCE_DIR}/extension/schemas/${WW_GNOME_SCHEMA_ID}.gschema.xml
+            ${_ww_schema_stage}/
+    COMMAND ${GLIB_COMPILE_SCHEMAS} ${_ww_schema_stage}
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/extension/schemas/${WW_GNOME_SCHEMA_ID}.gschema.xml
+    COMMENT "Compiling ${WW_GNOME_SCHEMA_ID} gschema"
+    VERBATIM)
+add_custom_target(zmural-gnome-schema ALL DEPENDS ${_ww_compiled_schema})
+
+install(FILES ${_ww_compiled_schema}
+    DESTINATION "schemas"
+    COMPONENT gnome_extension
+    EXCLUDE_FROM_ALL)
+
+install(PROGRAMS
+        renderer/renderer.js
+    DESTINATION "renderer"
+    COMPONENT gnome_extension
+    EXCLUDE_FROM_ALL)
+
+# Self-contained bundling: ship libwaywallen-gobject + Waywallen-1.0.typelib
+# inside the zip so the extension installs cleanly under
+# ~/.local/share/gnome-shell/extensions/ without any system-wide dependency.
+# launcher.js prepends <extension>/lib to LD_LIBRARY_PATH and
+# <extension>/lib/girepository-1.0 to GI_TYPELIB_PATH when these are present.
+# The display lib is statically linked into libwaywallen-gobject, so only the
+# one .so ships.
+#
+# ZIP can't carry POSIX symlinks portably, so we copy the real .so file
+# under the SONAME name (e.g. libwaywallen-gobject.so.0). ld.so resolves
+# DT_NEEDED by SONAME, so a single file is enough.
+install(FILES $<TARGET_FILE:waywallen-gobject>
+    DESTINATION "lib"
+    RENAME "libwaywallen-gobject.so.${PROJECT_VERSION_MAJOR}"
+    COMPONENT gnome_extension
+    EXCLUDE_FROM_ALL)
+
+install(FILES
+        ${PROJECT_BINARY_DIR}/plugins/gobject/Waywallen-1.0.typelib
+    DESTINATION "lib/girepository-1.0"
+    COMPONENT gnome_extension
+    EXCLUDE_FROM_ALL)
+
+# --- System install (`cmake --install`, dev convenience) ------------------
+
+install(FILES extension/schemas/${WW_GNOME_SCHEMA_ID}.gschema.xml
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/glib-2.0/schemas)
+
+install(FILES ${_ext_files}
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/gnome-shell/extensions/${WW_GNOME_UUID})
+install(FILES extension/schemas/${WW_GNOME_SCHEMA_ID}.gschema.xml
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/gnome-shell/extensions/${WW_GNOME_UUID}/schemas)
+install(PROGRAMS renderer/renderer.js
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/gnome-shell/extensions/${WW_GNOME_UUID}/renderer)

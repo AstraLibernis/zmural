@@ -1,0 +1,260 @@
+libmpv-2.dll: credits
+=====================
+
+zmural's Windows release plays video and pictures with libmpv-2.dll, a
+build of mpv (LGPL) by the mpv-winbuild project:
+
+  https://github.com/zhongfly/mpv-winbuild
+  release 2026-09-26-a1bf4b6559, mpv-dev-lgpl-x86_64-20260926-git-a1bf4b6559.7z
+  built with https://github.com/shinchiro/mpv-winbuild-cmake
+
+That one file holds the work of everyone below. They are listed from the
+build recipe (mpv and FFmpeg, and what they are built with, minus what the
+LGPL build leaves out). A few are headers or helpers used while building.
+Each project's licence text is in its repository, at the link given.
+
+Thank you all.
+
+The player
+----------
+  mpv
+      https://github.com/mpv-player/mpv
+      LGPL-2.1-or-later (this build: -Dgpl=false)
+  FFmpeg
+      https://github.com/FFmpeg/FFmpeg
+      LGPL-3.0-or-later (this build)
+
+Video and pictures
+------------------
+  dav1d (AV1)
+      https://code.videolan.org/videolan/dav1d
+      BSD-2-Clause
+  libaom (AV1)
+      https://aomedia.googlesource.com/aom
+      BSD-2-Clause, with the AOMedia patent licence
+  SVT-AV1
+      https://gitlab.com/AOMediaCodec/SVT-AV1
+      BSD-3-Clause-Clear
+  libvpx (VP8, VP9)
+      https://chromium.googlesource.com/webm/libvpx
+      BSD-3-Clause
+  uavs3d (AVS3)
+      https://github.com/uavs3/uavs3d
+      BSD-style
+  libjxl (JPEG XL)
+      https://github.com/libjxl/libjxl
+      BSD-3-Clause
+  libwebp
+      https://chromium.googlesource.com/webm/libwebp
+      BSD-3-Clause
+  libjpeg-turbo
+      https://github.com/libjpeg-turbo/libjpeg-turbo
+      IJG, BSD-3-Clause and zlib
+  libpng
+      https://github.com/pnggroup/libpng
+      libpng licence
+  zimg
+      https://github.com/sekrit-twc/zimg
+      WTFPL
+  graphengine
+      https://github.com/sekrit-twc/graphengine
+      WTFPL
+  Highway
+      https://github.com/google/highway
+      Apache-2.0 or BSD-3-Clause
+  oneVPL (Intel)
+      https://github.com/intel/libvpl
+      MIT
+  libva
+      https://github.com/intel/libva
+      MIT
+  AMF headers (AMD)
+      https://github.com/GPUOpen-LibrariesAndSDKs/AMF
+      MIT
+  nv-codec-headers
+      https://github.com/FFmpeg/nv-codec-headers
+      MIT
+
+Sound
+-----
+  Opus
+      https://github.com/xiph/opus
+      BSD-3-Clause
+  Opus DNN models
+      https://opus-codec.org/
+      BSD-3-Clause
+  Vorbis
+      https://github.com/xiph/vorbis
+      BSD-3-Clause
+  Ogg
+      https://github.com/xiph/ogg
+      BSD-3-Clause
+  Speex
+      https://github.com/xiph/speex
+      BSD-3-Clause
+  LAME
+      https://gitlab.com/shinchiro/lame
+      LGPL-2.0-or-later
+  SoX Resampler
+      https://gitlab.com/shinchiro/soxr
+      LGPL-2.1-or-later
+  libbs2b
+      https://github.com/alexmarsev/libbs2b
+      MIT
+  libmysofa
+      https://github.com/hoene/libmysofa
+      BSD-3-Clause
+  libopenmpt
+      https://lib.openmpt.org/
+      BSD-3-Clause
+  libmodplug
+      https://github.com/Konstanty/libmodplug
+      public domain
+
+Subtitles and text
+------------------
+  libass
+      https://github.com/libass/libass
+      ISC
+  FreeType
+      https://github.com/freetype/freetype
+      FreeType License (or GPL-2.0)
+  HarfBuzz
+      https://github.com/harfbuzz/harfbuzz
+      Old MIT
+  GNU FriBidi
+      https://github.com/fribidi/fribidi
+      LGPL-2.1-or-later
+  Fontconfig
+      https://gitlab.freedesktop.org/fontconfig/fontconfig
+      MIT-style
+  libunibreak
+      https://github.com/adah1972/libunibreak
+      zlib
+  uchardet
+      https://gitlab.freedesktop.org/uchardet/uchardet
+      MPL-1.1, GPL-2.0 or LGPL-2.1
+  libaribcaption
+      https://github.com/xqq/libaribcaption
+      MIT
+  subrandr
+      https://github.com/afishhh/subrandr
+      MPL-2.0
+  GNU libiconv
+      https://www.gnu.org/software/libiconv/
+      LGPL-2.1-or-later
+  libxml2
+      https://github.com/GNOME/libxml2
+      MIT
+
+Graphics
+--------
+  libplacebo
+      https://github.com/haasn/libplacebo
+      LGPL-2.1-or-later
+  Vulkan Loader
+      https://github.com/KhronosGroup/Vulkan-Loader
+      Apache-2.0
+  shaderc
+      https://github.com/google/shaderc
+      Apache-2.0
+  glslang
+      https://github.com/KhronosGroup/glslang
+      BSD-3-Clause and others (see its licence)
+  SPIRV-Tools
+      https://github.com/KhronosGroup/SPIRV-Tools
+      Apache-2.0
+  SPIRV-Headers
+      https://github.com/KhronosGroup/SPIRV-Headers
+      MIT-style (Khronos)
+  SPIRV-Cross
+      https://github.com/KhronosGroup/SPIRV-Cross
+      Apache-2.0
+  ANGLE headers
+      https://github.com/google/angle
+      BSD-3-Clause
+  glad
+      https://github.com/Dav1dde/glad
+      MIT
+  Little CMS
+      https://github.com/mm2/Little-CMS
+      MIT
+
+Discs, network and compression
+------------------------------
+  libbluray
+      https://code.videolan.org/videolan/libbluray
+      LGPL-2.1-or-later
+  libudfread
+      https://code.videolan.org/videolan/libudfread
+      LGPL-2.1-or-later
+  libcurl
+      https://github.com/curl/curl
+      curl licence (MIT-style)
+  OpenSSL
+      https://github.com/openssl/openssl
+      Apache-2.0
+  nghttp2
+      https://github.com/nghttp2/nghttp2
+      MIT
+  nghttp3
+      https://github.com/ngtcp2/nghttp3
+      MIT
+  ngtcp2
+      https://github.com/ngtcp2/ngtcp2
+      MIT
+  c-ares
+      https://github.com/c-ares/c-ares
+      MIT
+  libpsl
+      https://github.com/rockdaboot/libpsl
+      MIT
+  libarchive
+      https://github.com/libarchive/libarchive
+      BSD-2-Clause
+  zlib-ng
+      https://github.com/zlib-ng/zlib-ng
+      zlib
+  bzip2
+      https://gitlab.com/bzip2/bzip2
+      bzip2 licence (BSD-style)
+  XZ Utils (liblzma)
+      https://github.com/tukaani-project/xz
+      0BSD
+  Zstandard
+      https://github.com/facebook/zstd
+      BSD-3-Clause (or GPL-2.0)
+  Brotli
+      https://github.com/google/brotli
+      MIT
+  xxHash
+      https://github.com/Cyan4973/xxHash
+      BSD-2-Clause
+  fast_float
+      https://github.com/fastfloat/fast_float
+      Apache-2.0, MIT or BSL-1.0
+
+Scripting and the rest
+----------------------
+  LuaJIT (OpenResty)
+      https://github.com/openresty/luajit2
+      MIT
+  MuJS
+      https://codeberg.org/ccxvii/mujs
+      ISC
+  VapourSynth
+      https://github.com/vapoursynth/vapoursynth
+      LGPL-2.1-or-later
+  SDL2
+      https://github.com/libsdl-org/SDL
+      zlib
+  libsixel
+      https://github.com/saitoha/libsixel
+      MIT
+
+Left out of this build (GPL-only or not needed): x264, x265, davs2,
+Rubber Band, libdvdnav, libdvdread, libssh, libsrt, zvbi, LZO, OpenAL Soft
+and AviSynth.
+
+zmural loads libmpv-2.dll at runtime and does not change it; it can be
+replaced with any compatible libmpv build. See THIRD_PARTY_NOTICES.md.

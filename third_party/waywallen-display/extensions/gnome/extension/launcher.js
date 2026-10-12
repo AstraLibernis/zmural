@@ -1,0 +1,183 @@
+import Meta from 'gi://Meta';
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
+import * as Config from 'resource:///org/gnome/shell/misc/config.js';
+
+import {decodeControlFrame} from './controlCodec.js';
+
+const shellMajor = parseInt(Config.PACKAGE_VERSION.split('.')[0]);
+
+// GNOME 49 dropped Meta.is_wayland_compositor(); fall back to WAYLAND_DISPLAY.
+function isWaylandSession() {
+    if (typeof Meta.is_wayland_compositor === 'function')
+        return Meta.is_wayland_compositor();
+    return !!GLib.getenv('WAYLAND_DISPLAY');
+}
+
+export class LaunchSubprocess {
+    constructor(flags = Gio.SubprocessFlags.NONE) {
+        this._isX11 = !isWaylandSession();
+        this._flags = flags
+            | Gio.SubprocessFlags.STDIN_PIPE
+            | Gio.SubprocessFlags.STDOUT_PIPE
+            | Gio.SubprocessFlags.STDERR_PIPE;
+        this.cancellable = new Gio.Cancellable();
+        this._launcher = new Gio.SubprocessLauncher({flags: this._flags});
+
+        if (!this._isX11 && shellMajor < 49)
+            this._waylandClient = Meta.WaylandClient.new(global.context, this._launcher);
+
+        this.subprocess = null;
+        this.running = false;
+        this._controlHandler = null;
+    }
+
+    setControlHandler(handler) {
+        this._controlHandler = handler;
+    }
+
+    spawnv(argv) {
+        if (!this._isX11) {
+            if (shellMajor < 49) {
+                this.subprocess = this._waylandClient.spawnv(global.display, argv);
+            } else {
+                this._waylandClient = Meta.WaylandClient.new_subprocess(
+                    global.context, this._launcher, argv);
+                this.subprocess = this._waylandClient.get_subprocess();
+            }
+        } else {
+            this.subprocess = this._launcher.spawnv(argv);
+        }
+
+        if (this._launcher.close)
+            this._launcher.close();
+        this._launcher = null;
+
+        if (this.subprocess) {
+            this._stdoutStream = Gio.DataInputStream.new(
+                this.subprocess.get_stdout_pipe());
+            this._stderrStream = Gio.DataInputStream.new(
+                this.subprocess.get_stderr_pipe());
+            this._stdinStream = this.subprocess.get_stdin_pipe();
+            this._readControlOutput();
+            this._readErrorOutput();
+            this.subprocess.wait_async(this.cancellable, () => {
+                this.running = false;
+                this._stdoutStream = null;
+                this._stderrStream = null;
+                this._stdinStream = null;
+                this.cancellable = null;
+            });
+            this.running = true;
+        }
+        return this.subprocess;
+    }
+
+    // Write one control line to the renderer's stdin. Best-effort:
+    // drops silently if the pipe is gone or busy.
+    writeStdin(line) {
+        if (!this._stdinStream)
+            return;
+        try {
+            this._stdinStream.write_bytes(
+                new GLib.Bytes(new TextEncoder().encode(line)), null);
+        } catch (_e) { /* pipe full or closed; pointer events are droppable */ }
+    }
+
+    set_cwd(cwd) {
+        if (this._launcher)
+            this._launcher.set_cwd(cwd);
+    }
+
+    /**
+     * Prepend a colon-separated entry to an env var, preserving any
+     * existing value. Used to point gjs at the bundled typelib / .so
+     * shipped inside the extension zip.
+     */
+    prepend_env(name, value) {
+        if (!this._launcher || !value)
+            return;
+        const old = GLib.getenv(name);
+        const next = old && old.length > 0 ? `${value}:${old}` : value;
+        this._launcher.setenv(name, next, true);
+    }
+
+    set_env(name, value) {
+        if (!this._launcher)
+            return;
+        this._launcher.setenv(name, value, true);
+    }
+
+    _readControlOutput() {
+        if (!this._stdoutStream)
+            return;
+        this._stdoutStream.read_line_async(GLib.PRIORITY_DEFAULT,
+            this.cancellable, (stream, res) => {
+                try {
+                    const [line, len] = stream.read_line_finish_utf8(res);
+                    if (line === null) {
+                        this._stdoutStream = null;
+                        return;
+                    }
+                    if (len) {
+                        const frame = decodeControlFrame(line);
+                        this._controlHandler?.(frame);
+                    }
+                } catch (e) {
+                    if (e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                        return;
+                    logError(e, '[zmural] invalid renderer control frame');
+                }
+                this._readControlOutput();
+            });
+    }
+
+    _readErrorOutput() {
+        if (!this._stderrStream)
+            return;
+        this._stderrStream.read_line_async(GLib.PRIORITY_DEFAULT,
+            this.cancellable, (stream, res) => {
+                try {
+                    const [line, len] = stream.read_line_finish_utf8(res);
+                    if (line === null) {
+                        this._stderrStream = null;
+                        return;
+                    }
+                    if (len)
+                        log(`[ww-renderer] ${line}`);
+                } catch (e) {
+                    if (e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                        return;
+                }
+                this._readErrorOutput();
+            });
+    }
+
+    // Set the native window-list flag used by show-desktop, which Shell's
+    // JavaScript window filters do not affect.
+    setWindowListVisible(window, visible) {
+        if (!this.ownsWindow(window))
+            return;
+        const method = visible ? 'show_in_window_list' : 'hide_from_window_list';
+        // GNOME 49 moved this API from WaylandClient to MetaWindow.
+        if (typeof window[method] === 'function')
+            window[method]();
+        else
+            this._waylandClient?.[method](window);
+    }
+
+    /**
+     * Returns true iff the given MetaWindow was spawned by this subprocess.
+     */
+    ownsWindow(window) {
+        if (!this.running || !this.subprocess)
+            return false;
+        try {
+            if (this._isX11)
+                return `${window.get_pid()}` === this.subprocess.get_identifier();
+            return this._waylandClient.owns_window(window);
+        } catch (_e) {
+            return false;
+        }
+    }
+}

@@ -1,0 +1,3 @@
+// Windows resources for every zmural executable: the application icon.
+// Resource ID 1 is what the tray and Explorer pick up.
+1 ICON "zmural.ico"

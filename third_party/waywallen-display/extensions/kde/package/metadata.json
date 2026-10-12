@@ -1,0 +1,21 @@
+{
+    "KPackageStructure": "Plasma/Wallpaper",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "AstraLibernis"
+            },
+            {
+                "Name": "hypengw (waywallen-display)"
+            }
+        ],
+        "Category": "",
+        "Description": "Live wallpapers from zmural (display plugin based on waywallen-display)",
+        "Icon": "preferences-desktop-wallpaper",
+        "Id": "org.zmural.kde",
+        "License": "GPL-3.0-or-later",
+        "Name": "zmural",
+        "Website": "https://github.com/AstraLibernis/zmural"
+    },
+    "X-KDE-ParentApp": "org.kde.plasmashell"
+}
