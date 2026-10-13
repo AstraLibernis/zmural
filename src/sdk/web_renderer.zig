@@ -548,6 +548,7 @@ fn handle(cmd: proto.ToRenderer) void {
         },
         .stop => w.PostQuitMessage(0),
         .release => {}, // Linux only
+        .ping => st.session.send(.pong) catch {}, // zsnag:ok — a closed pipe ends the loop by itself
     }
 }
 

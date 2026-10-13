@@ -16,6 +16,9 @@
 //!
 //! Single-threaded: one poll loop over the daemon socket, mpv's wakeups
 //! (an eventfd its threads write to) and, for the test pattern, a timerfd.
+//! While mpv plays, the loop also wakes once a second to see that it still
+//! does (`stall.zig`): a player stuck for good ends this renderer, and the
+//! daemon starts it again.
 
 const std = @import("std");
 const linux = std.os.linux;
@@ -26,6 +29,7 @@ const proto = @import("../protocol/renderer.zig");
 const unix = @import("../protocol/unix.zig");
 const testpattern = @import("testpattern.zig");
 const mpv_options = @import("mpv_options.zig");
+const stall = @import("stall.zig");
 const FillMode = @import("../core/layout.zig").FillMode;
 
 pub const Kind = enum { image, video };
@@ -83,6 +87,8 @@ const State = struct {
     decoder_len: usize = 0,
     /// Test pattern frame clock.
     timer_fd: linux.fd_t = -1,
+    stall: stall.Stall = .{},
+    last_stall_check_ms: u64 = 0,
     quit: bool = false,
 };
 
@@ -148,7 +154,9 @@ fn loop() !void {
             .{ .fd = st.wake_fd, .events = linux.POLL.IN, .revents = 0 },
             .{ .fd = st.timer_fd, .events = linux.POLL.IN, .revents = 0 },
         };
-        const rc = linux.poll(&pfd, pfd.len, -1);
+        // Asleep until something happens, unless a playing player is to be checked.
+        const timeout: i32 = if (watchingPlayer()) stall.check_every_ms else -1;
+        const rc = linux.poll(&pfd, pfd.len, timeout);
         switch (linux.errno(rc)) {
             .SUCCESS => {},
             .INTR => continue,
@@ -180,7 +188,34 @@ fn loop() !void {
             st.frame +%= 1;
             for (&st.surfaces) |*slot| if (slot.*) |*s| drawPattern(s);
         }
+        checkStall();
     }
+}
+
+fn watchingPlayer() bool {
+    return st.playing and st.player != null;
+}
+
+fn nowMs() u64 {
+    var ts: linux.timespec = undefined;
+    _ = linux.clock_gettime(.MONOTONIC, &ts);
+    return @as(u64, @intCast(ts.sec)) * std.time.ms_per_s + @as(u64, @intCast(ts.nsec)) / std.time.ns_per_ms; // zsnag:ok — CLOCK_MONOTONIC is never negative
+}
+
+/// Once a second while playing: a player idle for `stall.limit_ms` while
+/// meant to play has stopped for good. Say so and end; the daemon starts
+/// this renderer again, and a file that can't be played any more then fails
+/// to load and is reported as such.
+fn checkStall() void {
+    const now = nowMs();
+    if (now -| st.last_stall_check_ms < stall.check_every_ms) return;
+    st.last_stall_check_ms = now;
+    const api = if (st.api) |*a| a else return;
+    const h = st.player orelse return;
+    const stuck = st.playing and stall.coreIdle(api, h);
+    if (!st.stall.check(now, stuck)) return;
+    fail("stopped playing '{s}': no new frame for {d} s; starting it again", .{ st.path, stall.limit_ms / std.time.ms_per_s });
+    st.quit = true;
 }
 
 fn send(msg: proto.FromRenderer) unix.Error!void {
@@ -232,6 +267,7 @@ fn handle(cmd: proto.ToRenderer) void {
             }
         },
         .stop => st.quit = true,
+        .ping => send(.pong) catch {}, // zsnag:ok — a dead socket ends the loop on its next read
     }
 }
 
@@ -308,6 +344,8 @@ fn removeSurface(id: proto.SurfaceId) void {
 fn setPlaying(playing: bool) void {
     if (playing == st.playing) return;
     st.playing = playing;
+    // Idle while paused is no stall: count afresh from here.
+    st.stall = .{};
     if (usesMpv()) {
         const api = if (st.api) |*a| a else return;
         const h = st.player orelse return;

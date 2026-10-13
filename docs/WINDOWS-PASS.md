@@ -84,6 +84,7 @@ Keyboard: Tab, the arrows, Enter, Escape move and press as the README says.
 ## Crashes and updates
 
 - [ ] Restart Explorer (Task Manager): the wallpaper and the tray icon come back
+- [ ] With a video playing, suspend its renderer (Resource Monitor > CPU, right-click the `zmural.exe` whose command line has `--renderer`, Suspend process): within about 20 s it is replaced and the video moves again; the log says "no answer for 10 s"
 
 ## Uninstall (last)
 

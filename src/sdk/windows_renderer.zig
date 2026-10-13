@@ -8,7 +8,9 @@
 //! - the GDI test pattern, when the path is `test-pattern`.
 //!
 //! Paused means paused: mpv's `pause` property, or no timer for the test
-//! pattern, so no frames and ~0 CPU/GPU.
+//! pattern, so no frames and ~0 CPU/GPU. While mpv plays, a timer looks once
+//! a second that it still does (`stall.zig`): a player stuck for good ends
+//! this renderer, and the daemon starts it again.
 //!
 //! mpv teardown runs on a worker thread. `mpv_terminate_destroy` blocks, and
 //! while it tears down its child window mpv's threads may send messages to
@@ -23,6 +25,7 @@ const proto = @import("../protocol/renderer.zig");
 const pipe = @import("../protocol/pipe.zig");
 const testpattern = @import("testpattern.zig");
 const mpv_options = @import("mpv_options.zig");
+const stall = @import("stall.zig");
 const FillMode = @import("../core/layout.zig").FillMode;
 
 pub const Kind = enum { image, video };
@@ -33,6 +36,7 @@ const WM_DAEMON = w.WM_APP + 1;
 const WM_MPV = w.WM_APP + 2;
 const WM_PLAYER_GONE = w.WM_APP + 3;
 const timer_frame: usize = 1;
+const timer_stall: usize = 2;
 const max_surfaces = 16;
 
 const Surface = struct {
@@ -43,6 +47,7 @@ const Surface = struct {
     started: bool = false,
     /// mpv is being torn down on a worker thread; destroy the window after.
     closing: bool = false,
+    stall: stall.Stall = .{},
 };
 
 /// At most this many mpv log lines per second go to the daemon.
@@ -161,6 +166,7 @@ fn handle(cmd: proto.ToRenderer) void {
         },
         .stop => w.PostQuitMessage(0),
         .release => {}, // Linux only
+        .ping => st.session.send(.pong) catch {}, // zsnag:ok — a closed pipe ends the loop by itself
     }
 }
 
@@ -219,6 +225,15 @@ fn setPlaying(playing: bool) void {
     st.playing = playing;
     if (usesMpv()) {
         setOnPlayers("pause", if (playing) "no" else "yes");
+        // Idle while paused is no stall: count afresh from here.
+        for (&st.surfaces) |*slot| if (slot.*) |*s| {
+            s.stall = .{};
+        };
+        if (playing) {
+            _ = w.SetTimer(st.control, timer_stall, stall.check_every_ms, null);
+        } else {
+            _ = w.KillTimer(st.control, timer_stall);
+        }
     } else if (playing) {
         _ = w.SetTimer(st.control, timer_frame, 1000 / @as(w.UINT, st.fps), null);
     } else {
@@ -406,6 +421,23 @@ fn findSurface(id: usize) ?*Surface {
 
 // ---- window procedures -------------------------------------------------------------
 
+/// A player idle for `stall.limit_ms` while meant to play has stopped for
+/// good. Say so and end; the daemon starts this renderer again, and a file
+/// that can't be played any more then fails to load and is reported as such.
+fn checkStall() void {
+    const api = if (st.api) |*a| a else return;
+    const now = w.GetTickCount64();
+    for (&st.surfaces) |*slot| if (slot.*) |*s| {
+        if (s.closing) continue;
+        const h = s.player orelse continue;
+        const stuck = st.playing and stall.coreIdle(api, h);
+        if (!s.stall.check(now, stuck)) continue;
+        fail("stopped playing '{s}': no new frame for {d} s; starting it again", .{ st.path, stall.limit_ms / std.time.ms_per_s });
+        w.PostQuitMessage(0);
+        return;
+    };
+}
+
 fn controlProc(hwnd: w.HWND, msg: w.UINT, wp: w.WPARAM, lp: w.LPARAM) callconv(.winapi) w.LRESULT {
     switch (msg) {
         WM_DAEMON => {
@@ -440,6 +472,10 @@ fn controlProc(hwnd: w.HWND, msg: w.UINT, wp: w.WPARAM, lp: w.LPARAM) callconv(.
             return 0;
         },
         w.WM_TIMER => {
+            if (wp == timer_stall) {
+                checkStall();
+                return 0;
+            }
             st.frame +%= 1;
             for (st.surfaces) |slot| if (slot) |s| {
                 _ = w.InvalidateRect(s.hwnd, null, 0);

@@ -63,7 +63,8 @@ through package-test, package-debian-test, crash-test and the soak test (30 roun
 
 Stability and the loose ends of what exists, before anything new.
 
-- [ ] A renderer that stops sending frames is noticed and restarted (a frame watchdog): stopped by a signal, or its file cut short while it plays (from the adversarial test)
+- [x] **A renderer that stops sending frames is noticed and restarted (Linux, 2026-10-13):** zmural pings each renderer every 5 s and kills one that doesn't answer within 10 s (SIGSTOP: back in 13 s); a renderer whose mpv sits idle 10 s while meant to play ends itself (a video cut to nothing or to its header while it plays: caught 12-14 s after the cut). The restart can't load the file, so the user is told and the wallpaper that played before it comes back (zmural now remembers two, not one). A still picture, a GIF holding a frame 15 s and a video paused 25 s are left alone. `tools/watchdog-test.sh`, mutation-checked; the supervisor's heartbeat and the stall check are unit-tested
+- [ ] The same on Windows: compiled (the ping, and the stall check on each surface's player); for the Windows pass
 - [ ] Windows: the settings window runs inside zmural, and Zig's crash handler treats any first-chance access violation as fatal, so a shell extension (file picker, thumbnails) that raises and catches its own would take zmural down. An unhandled-exception filter for the crash log instead of the segfault handler.
 - [ ] Windows: a second `zmural --settings` may only flash the taskbar (`AllowSetForegroundWindow`); a right-click after keyboard use opens the menu at the focused tile
 - [ ] Windows web wallpapers: send `shown` once the page has painted, so switching to one doesn't wait 4 s; a frozen last frame while paused (black today); an fps cap; an Explorer-restart test

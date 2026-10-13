@@ -22,6 +22,9 @@
 //!   lasted longer than `stable_after_ms` resets the count, so only a renderer
 //!   that never manages to stay up gives up, however slowly it crashes.
 //! - Stronger pause actions apply at once; weaker ones wait `relax_ms`.
+//! - A running renderer is pinged every `ping_every_ms`; one that hasn't
+//!   answered within `answer_within_ms` is killed (stopped, or hung), and its
+//!   end counts like any other crash.
 
 const std = @import("std");
 const Action = @import("zmural").policy.Action;
@@ -33,6 +36,8 @@ pub const Config = struct {
     restart_max_ms: u64 = 10_000,
     give_up_after: u32 = 5,
     stable_after_ms: u64 = 30_000,
+    ping_every_ms: u64 = 5_000,
+    answer_within_ms: u64 = 10_000,
 };
 
 /// What the runtime must do.
@@ -44,6 +49,10 @@ pub const Command = union(enum) {
     /// Play, muted or not (the user's own mute setting applies on top).
     play: struct { muted: bool },
     pause,
+    /// Ask it to answer (`pong`).
+    ping,
+    /// It hasn't answered a ping in time: kill it. Its end follows as a crash.
+    kill,
 };
 
 /// What happened when a connection ended, for the log.
@@ -66,6 +75,10 @@ pub const Supervisor = struct {
     restart_at_ms: u64 = 0,
     /// Short-lived runs in a row.
     crashes: u32 = 0,
+    /// When the next ping goes out; 0 until the first tick after `ready`.
+    ping_at_ms: u64 = 0,
+    /// A ping not answered yet.
+    pinged_at_ms: ?u64 = null,
 
     /// A new renderer, with the policy's current wish. False: it must not be
     /// spawned yet (the policy says "stop"); relaxing that later spawns it.
@@ -82,6 +95,8 @@ pub const Supervisor = struct {
     pub fn attempting(s: *Supervisor, now: u64) void {
         s.state = .starting;
         s.last_attempt_ms = now;
+        s.ping_at_ms = 0;
+        s.pinged_at_ms = null;
     }
 
     /// It connected and said ready: put it into the policy's current state.
@@ -131,14 +146,39 @@ pub const Supervisor = struct {
         return null;
     }
 
-    /// Timers: a relax that has come due, or a restart that has.
+    /// It answered a ping.
+    pub fn pong(s: *Supervisor, now: u64) void {
+        if (s.pinged_at_ms == null) return; // not one we are waiting for
+        s.pinged_at_ms = null;
+        s.ping_at_ms = now + s.cfg.ping_every_ms;
+    }
+
+    /// Timers: a relax that has come due, a ping, or a restart.
     pub fn tick(s: *Supervisor, now: u64) ?Command {
         if (s.pending) |a| if (now >= s.relax_at_ms) {
             s.pending = null;
             if (s.apply(a)) |c| return c;
         };
+        if (s.state == .running) return s.heartbeat(now);
         if (s.state == .waiting_restart and now >= s.restart_at_ms) return .spawn;
         return null;
+    }
+
+    fn heartbeat(s: *Supervisor, now: u64) ?Command {
+        if (s.pinged_at_ms) |at| {
+            if (now -| at < s.cfg.answer_within_ms) return null;
+            // No more pings to a process being killed; `attempting` resets this.
+            s.pinged_at_ms = null;
+            s.ping_at_ms = std.math.maxInt(u64);
+            return .kill;
+        }
+        if (s.ping_at_ms == 0) {
+            s.ping_at_ms = now + s.cfg.ping_every_ms;
+            return null;
+        }
+        if (now < s.ping_at_ms) return null;
+        s.pinged_at_ms = now;
+        return .ping;
     }
 
     fn apply(s: *Supervisor, a: Action) ?Command {
@@ -350,4 +390,68 @@ test "duplicate end notices are harmless" {
     _ = s.ended(100);
     try testing.expectEqual(Outcome.expected, s.ended(101));
     try testing.expectEqual(@as(u32, 1), s.crashes);
+}
+
+test "a renderer that answers its pings is left alone, however long it runs" {
+    var s = running(0);
+    var t: u64 = 0;
+    var pings: u32 = 0;
+    while (t < 10 * 60_000) : (t += 250) {
+        const c = s.tick(t) orelse continue;
+        try testing.expectEqual(Command.ping, c);
+        pings += 1;
+        s.pong(t + 30);
+    }
+    // One every 5 s and a bit (the answer's own delay): ten minutes, ~120.
+    try testing.expect(pings >= 110 and pings <= 120);
+}
+
+test "a renderer that stops answering is killed 10 s after the ping, and that counts as a crash" {
+    var s = running(0);
+    try testing.expectEqual(@as(?Command, null), s.tick(0));
+    try testing.expectEqual(Command.ping, s.tick(5_000).?);
+    s.pong(5_010);
+    try testing.expectEqual(Command.ping, s.tick(10_010).?);
+    // Stopped now (SIGSTOP, a hang): no pong.
+    var t: u64 = 10_010;
+    while (t < 20_000) : (t += 250) try testing.expectEqual(@as(?Command, null), s.tick(t));
+    try testing.expectEqual(Command.kill, s.tick(20_010).?);
+    // Killed: no more pings, and no second kill, while it goes.
+    try testing.expectEqual(@as(?Command, null), s.tick(60_000));
+    try testing.expectEqual(@as(u64, 2_000), s.ended(60_100).restart_in_ms);
+    // The new process is pinged afresh.
+    s.attempting(s.restart_at_ms);
+    _ = s.ready();
+    try testing.expectEqual(@as(?Command, null), s.tick(62_200));
+    try testing.expectEqual(Command.ping, s.tick(67_200).?);
+}
+
+test "a late pong after the kill, or one never asked for, changes nothing" {
+    var s = running(0);
+    s.pong(100);
+    try testing.expectEqual(@as(?Command, null), s.tick(200));
+    try testing.expectEqual(Command.ping, s.tick(5_200).?);
+    try testing.expectEqual(Command.kill, s.tick(15_200).?);
+    s.pong(15_300);
+    try testing.expectEqual(@as(?Command, null), s.tick(30_000));
+}
+
+test "only a running renderer is pinged" {
+    var s: Supervisor = .{};
+    _ = s.begin(.none);
+    s.attempting(0);
+    var t: u64 = 0;
+    while (t < 60_000) : (t += 250) try testing.expectEqual(@as(?Command, null), s.tick(t));
+    // Stopped by a pause rule: nothing to ping either.
+    s = running(0);
+    _ = s.desire(100, .stop, 400);
+    t = 100;
+    while (t < 60_000) : (t += 250) try testing.expectEqual(@as(?Command, null), s.tick(t));
+}
+
+test "a paused renderer is still pinged: pausing doesn't stop it answering" {
+    var s = running(0);
+    try testing.expectEqual(Command.pause, s.desire(0, .pause, 400).?);
+    try testing.expectEqual(@as(?Command, null), s.tick(100));
+    try testing.expectEqual(Command.ping, s.tick(5_100).?);
 }

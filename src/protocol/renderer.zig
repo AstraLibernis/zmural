@@ -19,7 +19,8 @@
 /// 3: Linux buffers (`buffers`, `release`, `AddSurface.device`/`modifiers`,
 /// `FrameReady.generation`).
 /// 4: `Init.network` is gone: no wallpaper is given the network.
-pub const version: u16 = 4;
+/// 5: `ping` and `pong`: a renderer that stops answering is restarted.
+pub const version: u16 = 5;
 
 /// Surface IDs are chosen by the daemon and unique within one renderer.
 pub const SurfaceId = u16;
@@ -63,6 +64,8 @@ pub const ToRendererOp = enum(u16) {
     stop = 10,
     /// Linux only.
     release = 11,
+    /// Answer with `pong` at once: the daemon restarts a renderer that doesn't.
+    ping = 12,
 };
 
 pub const ToRenderer = union(ToRendererOp) {
@@ -75,6 +78,7 @@ pub const ToRenderer = union(ToRendererOp) {
     set_property: SetProperty,
     stop: void,
     release: Release,
+    ping: void,
 };
 
 pub const LogLevel = enum(u8) { debug, info, warn, err };
@@ -123,6 +127,8 @@ pub const FromRendererOp = enum(u16) {
     decoder = 8,
     /// Windows: a surface shows its first frame.
     shown = 9,
+    /// The answer to `ping`.
+    pong = 10,
 };
 
 pub const FromRenderer = union(FromRendererOp) {
@@ -134,6 +140,7 @@ pub const FromRenderer = union(FromRendererOp) {
     buffers: Buffers,
     decoder: Decoder,
     shown: Shown,
+    pong: void,
 };
 
 test "renderer messages round trip" {

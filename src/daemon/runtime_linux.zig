@@ -1745,6 +1745,7 @@ fn onRendererReadable(r: *Renderer) void {
             if (cantShow(fl.message)) rt.fallback.failed(rt.gpa, r.path, fl.message);
         },
         .decoder => |dc| onDecoder(r, dc),
+        .pong => r.sup.pong(now()),
         .shown => {}, // Windows only
         .window => {}, // Windows only
     }
@@ -1807,6 +1808,11 @@ fn execute(r: *Renderer, cmd: lifecycle.Command) void {
             sendRenderer(r, .play, &.{});
         },
         .pause => sendRenderer(r, .pause, &.{}),
+        .ping => sendRenderer(r, .ping, &.{}),
+        .kill => {
+            log.warn("renderer {d}: no answer for {d} s (stopped or hung); starting it again", .{ r.id, r.sup.cfg.answer_within_ms / 1000 });
+            if (r.pid) |pid| _ = linux.kill(pid, linux.SIG.KILL);
+        },
     }
 }
 

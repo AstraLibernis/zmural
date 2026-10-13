@@ -44,7 +44,8 @@ How zmural is put together, the principles behind it, and the full feature plan.
 - One process per active wallpaper, shared across monitors when possible. A renderer is zmural started again in its renderer mode, not a separate program.
 - Built in, all of them: video and pictures (libmpv) and web pages. zmural never loads a renderer it didn't ship, and the renderer protocol is private to it (see [Security](../README.md#security)).
 - A still image renders once and then sleeps; a video or a page renders until it is paused.
-- A small, uniform command set: *init, add/remove surface, play, pause, set-volume, stop*, and *set-property* for a wallpaper's properties.
+- A small, uniform command set: *init, add/remove surface, play, pause, set-volume, stop, ping*, and *set-property* for a wallpaper's properties.
+- A renderer that dies is started again, a little later each time, and given up on after five short runs in a row. Two watchdogs catch one that hangs instead: zmural pings each renderer every 5 s and kills one that hasn't answered within 10 s (stopped, or stuck), and a renderer whose player stops by itself while it should play (mpv idle for 10 s, as with a video cut short on disk while it plays) ends itself. Either way it is started again; a file that can't be played any more then fails to load, the user is told, and the wallpaper that played before it comes back. A still picture, a GIF holding a frame and a paused wallpaper keep mpv busy or are paused on purpose, so none of them counts.
 
 ### Display hosts: putting pixels behind the icons
 The one part that has to differ per OS. zmural uses the cheapest correct method on each:

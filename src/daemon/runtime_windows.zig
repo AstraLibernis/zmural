@@ -756,6 +756,11 @@ fn execute(r: *Renderer, cmd: lifecycle.Command) void {
             send(r, .play);
         },
         .pause => send(r, .pause),
+        .ping => send(r, .ping),
+        .kill => {
+            std.log.warn("renderer {d}: no answer for {d} s (stopped or hung); starting it again", .{ r.id, r.sup.cfg.answer_within_ms / 1000 });
+            if (r.child) |c| c.kill();
+        },
     }
 }
 
@@ -1602,6 +1607,7 @@ fn onRenderer(r: *Renderer, msg: proto.FromRenderer) void {
             // Dealt with on the next tick, outside this renderer's message.
             if (cantShow(f.message)) rt.fallback.failed(rt.gpa, r.path, logSafe(&buf, f.message));
         },
+        .pong => r.sup.pong(now()),
         .frame_ready, .buffers, .decoder => {}, // Linux only
     }
 }

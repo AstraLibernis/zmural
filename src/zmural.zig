@@ -65,6 +65,8 @@ pub const sdk = struct {
     /// Linux renderer runtime (DMA-BUF surfaces) for video and images.
     pub const linux_renderer = @import("sdk/linux_renderer.zig");
     pub const mpv_options = @import("sdk/mpv_options.zig");
+    /// A player that stopped by itself while meant to play (both OSes).
+    pub const stall = @import("sdk/stall.zig");
     /// Windows control-protocol client (CLI, second daemon instance).
     pub const control_client = @import("sdk/control_client.zig");
     /// Linux control-protocol client (CLI, a second zmural).
