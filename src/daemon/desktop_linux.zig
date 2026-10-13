@@ -80,7 +80,63 @@ pub const Setup = struct {
     /// showing wallpaper is set as the desktop's own, still, meanwhile
     /// (zmural's plugin or extension draws over it once it runs).
     still: bool = false,
+    /// Plasma couldn't be switched to zmural's plugin (not reachable yet):
+    /// the runtime tries again (`KdeSwitch`).
+    kde_switch: ?KdeSwitch = null,
 };
+
+/// Switching Plasma's desktops to zmural's plugin, tried again while Plasma
+/// can't be reached (zmural started before it, at login, say): 1 s after
+/// the first try, then twice as long each time up to 30 s, for 5 minutes.
+/// A still picture is no help meanwhile: on Plasma the wallpaper portal goes
+/// through Plasma too.
+pub const KdeSwitch = struct {
+    /// The plugin was just installed: tell the user how it went.
+    installed: bool,
+    next_ms: u64,
+    delay_ms: u64 = first_delay_ms,
+    give_up_ms: u64,
+
+    const first_delay_ms = 1_000;
+    const max_delay_ms = 30_000;
+    const keep_trying_ms = 5 * 60_000;
+
+    /// The first try, at `now`, failed.
+    pub fn start(installed: bool, now: u64) KdeSwitch {
+        return .{ .installed = installed, .next_ms = now + first_delay_ms, .give_up_ms = now + keep_trying_ms };
+    }
+
+    pub const Step = enum { wait, try_now, give_up };
+
+    pub fn step(k: *const KdeSwitch, now: u64) Step {
+        if (now >= k.give_up_ms) return .give_up;
+        return if (now >= k.next_ms) .try_now else .wait;
+    }
+
+    /// The try `step` asked for failed: wait longer.
+    pub fn failed(k: *KdeSwitch, now: u64) void {
+        k.delay_ms = @min(k.delay_ms * 2, max_delay_ms);
+        k.next_ms = now + k.delay_ms;
+    }
+};
+
+/// The runtime's next try at switching Plasma (`KdeSwitch`). True when the
+/// desktops show zmural's plugin now; the user is told if it was just installed.
+pub fn retryKdeSwitch(k: *const KdeSwitch, bus: ?*dbus.Conn) bool {
+    if (!activateKde(bus)) return false;
+    if (k.installed) notify(bus, "Installed the zmural plugin for KDE Plasma", kde_switched_text);
+    return true;
+}
+
+/// Plasma never answered: say how to pick zmural's plugin by hand.
+pub fn gaveUpKdeSwitch(k: *const KdeSwitch, bus: ?*dbus.Conn) void {
+    log.warn("KDE Plasma: couldn't reach Plasma to switch the wallpaper type to zmural; giving up", .{});
+    // Not newly installed: the desktops were set to zmural before, and Plasma keeps that.
+    if (k.installed) notify(bus, "Installed the zmural plugin for KDE Plasma", kde_by_hand_text);
+}
+
+const kde_switched_text = "Your desktop now shows zmural's wallpaper. To go back: right-click the desktop, Desktop and Wallpaper, and pick another wallpaper type.";
+const kde_by_hand_text = "To show zmural's wallpaper: right-click the desktop, Desktop and Wallpaper, and set Wallpaper type to zmural.";
 
 pub fn setUp(gpa: std.mem.Allocator, io: std.Io, env: Env, bus: ?*dbus.Conn) Setup {
     installLauncher(gpa, io, env) catch |err| log.warn("can't install the settings launcher: {s}", .{@errorName(err)});
@@ -93,7 +149,7 @@ pub fn setUp(gpa: std.mem.Allocator, io: std.Io, env: Env, bus: ?*dbus.Conn) Set
         return .{ .short = short, .still = backend.pick(env.xdg_current_desktop, true) != .layer_shell };
     }
     switch (backend.pick(env.xdg_current_desktop, true)) {
-        .kde_plasma => setUpKde(gpa, io, env, bus),
+        .kde_plasma => if (setUpKde(gpa, io, env, bus)) |installed| return .{ .kde_switch = .start(installed, monotonicMs()) },
         .gnome_shell => if (setUpGnome(gpa, io, env, bus)) return .{ .still = true },
         .layer_shell, .portal_static => {},
     }
@@ -134,27 +190,35 @@ fn qtVersion(io: std.Io) ?req.Version {
     return null;
 }
 
-fn setUpKde(gpa: std.mem.Allocator, io: std.Io, env: Env, bus: ?*dbus.Conn) void {
+/// Installs or upgrades zmural's plugin and switches Plasma's desktops to it.
+/// When Plasma can't be reached for that, whether the plugin was just
+/// installed: the runtime tries again (`KdeSwitch`).
+fn setUpKde(gpa: std.mem.Allocator, io: std.Io, env: Env, bus: ?*dbus.Conn) ?bool {
     const zip = findBundle(gpa, io, env.exe_dir, kde_zip_name) orelse {
         log.warn("KDE Plasma: zmural's plugin ({s}) isn't next to zmural; build it with `zig build kde-plugin`", .{kde_zip_name});
         notify(bus, "zmural needs its KDE Plasma plugin", "Plasma shows its own wallpaper over other programs, so zmural uses a Plasma wallpaper plugin. It wasn't found next to zmural; reinstall zmural.");
-        return;
+        return null;
     };
     defer gpa.free(zip);
 
     const done = installKdePlugin(gpa, io, env, zip) catch |err| {
         log.err("KDE Plasma: can't install zmural's plugin: {s}", .{@errorName(err)});
         notify(bus, "zmural couldn't install its KDE Plasma plugin", "Plasma needs zmural's wallpaper plugin to show live wallpapers, and installing it failed. See zmural's log.");
-        return;
+        return null;
     };
-    const switched = activateKde(bus);
-    // An upgrade is quiet: the user already chose zmural's wallpaper.
-    if (done == .installed) {
-        notify(bus, "Installed the zmural plugin for KDE Plasma", if (switched)
-            "Your desktop now shows zmural's wallpaper. To go back: right-click the desktop, Desktop and Wallpaper, and pick another wallpaper type."
-        else
-            "To show zmural's wallpaper: right-click the desktop, Desktop and Wallpaper, and set Wallpaper type to zmural.");
+    if (!activateKde(bus)) {
+        log.info("KDE Plasma: trying again to switch the desktops to zmural", .{});
+        return done == .installed;
     }
+    // An upgrade is quiet: the user already chose zmural's wallpaper.
+    if (done == .installed) notify(bus, "Installed the zmural plugin for KDE Plasma", kde_switched_text);
+    return null;
+}
+
+fn monotonicMs() u64 {
+    var ts: std.os.linux.timespec = undefined;
+    _ = std.os.linux.clock_gettime(.MONOTONIC, &ts);
+    return @as(u64, @intCast(ts.sec)) * 1000 + @as(u64, @intCast(ts.nsec)) / std.time.ns_per_ms; // zsnag:ok — CLOCK_MONOTONIC is never negative
 }
 
 /// True when the extension is on but not running yet: GNOME starts it at the
@@ -527,4 +591,24 @@ pub fn shown(bus: ?*dbus.Conn, summary: []const u8, body: []const u8) bool {
         return false;
     };
     return true;
+}
+
+test "Plasma out of reach: tried again 1, 2, 4 ... 30 s apart, for 5 minutes" {
+    var k: KdeSwitch = .start(true, 1_000);
+    try std.testing.expectEqual(KdeSwitch.Step.wait, k.step(1_999));
+    var t: u64 = 2_000;
+    var gaps: [8]u64 = undefined;
+    var tries: usize = 0;
+    var last: u64 = 1_000; // the first try
+    while (k.step(t) != .give_up) : (t += 100) {
+        if (k.step(t) != .try_now) continue;
+        if (tries < gaps.len) gaps[tries] = t - last;
+        last = t;
+        tries += 1;
+        k.failed(t);
+    }
+    try std.testing.expectEqualSlices(u64, &.{ 1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000, 30_000 }, gaps[0..8]);
+    try std.testing.expectEqual(@as(u64, 301_000), t);
+    // Retries at 2, 4, 8, 16 and 32 s, then every 30 s up to 272 s; given up at 301 s.
+    try std.testing.expectEqual(@as(usize, 13), tries);
 }

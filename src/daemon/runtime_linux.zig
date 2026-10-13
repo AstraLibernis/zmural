@@ -188,6 +188,8 @@ const Runtime = struct {
     front: foreground.Front = .{},
     /// Something reports the program in front, so the app rule can fire.
     front_watched: bool = false,
+    /// Plasma couldn't be switched to zmural's plugin yet: tried again on ticks.
+    kde_switch: ?desktop.KdeSwitch = null,
     /// The app rule as `evaluate` last saw it, to log changes.
     app_in_front: bool = false,
     /// settings.toml as we last read or wrote it, to notice an outside edit.
@@ -279,6 +281,7 @@ pub fn run(gpa: std.mem.Allocator, io: std.Io, settings: Settings, opts: Options
     startBus();
     const setup = desktop.setUp(rt.gpa, rt.io, opts.desktop, if (rt.bus) |*b| b else null);
     if (setup.short) |short| tellShortfall(short);
+    rt.kde_switch = setup.kde_switch;
     if (setup.still) {
         rt.still.on = true;
         // Said already: what's missing, or that GNOME starts the extension at the next login.
@@ -855,6 +858,7 @@ fn superviseHost(t: u64) void {
 fn tick() void {
     const t = now();
     superviseHost(t);
+    retryKdeSwitch(t);
     checkStillFrame();
     updateStill();
     for (rt.renderers.items) |r| {
@@ -875,6 +879,20 @@ fn tick() void {
     evaluate();
     goBackFromBroken();
     rotate(t);
+}
+
+fn retryKdeSwitch(t: u64) void {
+    const k = if (rt.kde_switch) |*k| k else return;
+    switch (k.step(t)) {
+        .wait => {},
+        .try_now => if (desktop.retryKdeSwitch(k, if (rt.bus) |*b| b else null)) {
+            rt.kde_switch = null;
+        } else k.failed(t),
+        .give_up => {
+            desktop.gaveUpKdeSwitch(k, if (rt.bus) |*b| b else null);
+            rt.kde_switch = null;
+        },
+    }
 }
 
 fn startCompositor() void {
