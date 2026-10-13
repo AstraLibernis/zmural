@@ -30,9 +30,9 @@ behind it, not the control. What only a real desktop can show is said plainly in
 From the blind test of 0.1.0 ([notes/blind-test-2026-10-12.md](../notes/blind-test-2026-10-12.md))
 and the controls inventory ([CONTROLS.md](CONTROLS.md)), which found controls no test had pressed.
 
-**Where it stands (end of 2026-10-12):** done on both OSes; the Windows pass passed on the draft
-rebuilt from `main`. Left before tagging: the Linux rigs not re-run since the last commits, and the
-tarball checks ([notes/stopping-point-2026-10-12.md](../notes/stopping-point-2026-10-12.md)).
+**Published 2026-10-13 as a pre-release** (tag at 71746e8). Before tagging: the Windows pass on
+the draft, every Linux rig not re-run since the last commits (all passed), and the CI tarball
+through package-test, package-debian-test, crash-test and the soak test (30 rounds, flat).
 
 - [x] Zip bombs refused by ratio, and a zip capped at 4 GiB (fd39888)
 - [x] **Tray right-click on swaybar** (it calls `ContextMenu` and can't show the menu): opens the settings window (owner's choice, 2026-10-12). `tools/tray-test.sh` clicks swaybar's real icon, left and right, with a virtual pointer; the right-click step fails with the old no-op. Plasma's tray unchanged (`kde-test`, 20 of 20)
