@@ -35,8 +35,9 @@ fn acquire() void {
     while (!lock.tryLock()) std.Thread.yield() catch std.atomic.spinLoopHint();
 }
 
-/// Opens (and if needed rotates) `<dir>\<name>.log`. Without a log file,
-/// logging still goes to stderr.
+/// Opens (and if needed rotates) `<dir>\<name>.log`, making `dir` and any
+/// folder above it that is missing. Without a log file, logging still goes
+/// to stderr.
 pub fn open(dir: []const u8, name: []const u8) void {
     openLimited(dir, name, max_bytes);
 }
@@ -53,7 +54,7 @@ pub fn openLimited(dir: []const u8, name: []const u8, bytes: u64) void {
     toWide(&dir_w, dir) orelse return;
     toWide(&path_w, log_path) orelse return;
     toWide(&old_w, old) orelse return;
-    _ = w.CreateDirectoryW(&dir_w, null); // fine if it exists
+    makePath(&dir_w);
 
     const h = createAppend(&path_w) orelse return;
     var size: i64 = 0;
@@ -64,6 +65,21 @@ pub fn openLimited(dir: []const u8, name: []const u8, bytes: u64) void {
         acquire();
         defer lock.unlock();
         rotate();
+    }
+}
+
+/// Makes `dir` and every missing folder above it. Errors (it exists, or can't
+/// be made) show up when the file is opened.
+fn makePath(dir: [:0]u16) void {
+    const len = std.mem.len(dir.ptr);
+    // Each prefix ending before a separator, then the whole path. A drive
+    // ("C:") or a share's server name fails harmlessly: it isn't a folder.
+    for (1..len + 1) |i| {
+        if (i < len and dir[i] != '\\' and dir[i] != '/') continue;
+        const keep = dir[i];
+        dir[i] = 0;
+        _ = w.CreateDirectoryW(dir.ptr, null);
+        dir[i] = keep;
     }
 }
 
@@ -148,6 +164,25 @@ test "the log rotates while running once it passes its limit (audit L5)" {
     try std.testing.expect(cur.len <= 2_200);
     // The newest line is in the current file.
     try std.testing.expect(std.mem.find(u8, cur, "line 99 ") != null);
+}
+
+test "missing folders above the log's folder are made" {
+    const builtin = @import("builtin");
+    if (builtin.os.tag != .windows) return error.SkipZigTest;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const io = std.testing.io;
+    var buf: [512]u8 = undefined;
+    const n = try tmp.dir.realPath(io, &buf);
+    var dir_buf: [600]u8 = undefined;
+    const dir = try std.fmt.bufPrint(&dir_buf, "{s}\\missing/parent\\cfg", .{buf[0..n]});
+    open(dir, "zmural");
+    defer close();
+    try std.testing.expect(path().len > 0);
+    logFn(.info, .default, "hello", .{});
+    const text = try tmp.dir.readFileAlloc(io, "missing/parent/cfg/zmural.log", std.testing.allocator, .unlimited);
+    defer std.testing.allocator.free(text);
+    try std.testing.expect(std.mem.find(u8, text, "hello") != null);
 }
 
 fn hammer(id: usize, lines: usize) void {
