@@ -162,6 +162,9 @@ pub const Status = struct {
     /// why; "" when none. `zmural-console apply` waits for one of the two.
     broken: []const u8 = "",
     broken_why: []const u8 = "",
+    /// How the main wallpaper fills the screen; a monitor with its own fill
+    /// mode says so in `Monitors`.
+    fill: FillMode = .crop,
 };
 pub const SettingsInfo = struct {
     fill: FillMode,

@@ -91,12 +91,14 @@ check "crop: the picture reaches the top edge of the 4:3 monitor" "[ \"\$(top 2)
 z fill fit --monitor 2; sleep 2.5
 check "fit on that monitor only: bars there, the middle still the picture" "[ \"\$(top 2)\" = bar ] && both red red && [ \"\$(top 1)\" = red ]"
 check "…from a renderer of its own, recorded in the file and in status" "[ \$(fills) = 1 ] && z status | grep HEADLESS-2 | grep -q 'fill: fit'"
+check "…while status still gives the main fill mode as crop" "z status | grep -q '^fill *: crop\$' && ! z status | grep HEADLESS-1 | grep -q 'fill:'"
 down; up
 check "…and kept across a restart" "[ \"\$(top 2)\" = bar ] && [ \"\$(top 1)\" = red ]"
 z fill default --monitor 2; sleep 2.5
 check "fill default: that monitor follows the main fill mode again" "[ \"\$(top 2)\" = red ] && [ \$(fills) = 0 ]"
 z fill fit; sleep 2.5
 check "the main fill mode applies to every monitor without its own" "[ \"\$(top 2)\" = bar ]"
+check "…and status gives it (fit)" "z status | grep -q '^fill *: fit\$'"
 z fill crop; sleep 2.5
 
 # settings.toml edited by hand while zmural runs.

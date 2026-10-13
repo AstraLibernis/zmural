@@ -779,6 +779,7 @@ fn handleRequest(req: control.Request) control.Event {
                     .shown = rt.fallback.last_good orelse "",
                     .broken = rt.fallback.last_broken orelse "",
                     .broken_why = if (rt.fallback.last_broken != null) rt.fallback.message() else "",
+                    .fill = rt.settings.fill,
                     .paused = rt.settings.paused,
                     .muted = rt.settings.muted,
                     .monitors = @intCast(rt.screens.len), // zsnag:ok — at most monitors.max
