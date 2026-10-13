@@ -15,6 +15,9 @@ const std = @import("std");
 pub const Fallback = struct {
     /// The last wallpaper that reached the screen (owned).
     last_good: ?[]u8 = null,
+    /// The one before it (owned): what to go back to when the last one breaks
+    /// while it plays (cut short on disk, say), having reached the screen.
+    previous: ?[]u8 = null,
     /// A wallpaper that just failed, waiting for the runtime's next tick (owned).
     failed_path: ?[]u8 = null,
     /// What its renderer said about it, cut to fit.
@@ -28,6 +31,7 @@ pub const Fallback = struct {
 
     pub fn deinit(f: *Fallback, gpa: std.mem.Allocator) void {
         if (f.last_good) |p| gpa.free(p);
+        if (f.previous) |p| gpa.free(p);
         if (f.failed_path) |p| gpa.free(p);
         if (f.last_broken) |p| gpa.free(p);
         for (f.told.items) |p| gpa.free(p);
@@ -39,7 +43,8 @@ pub const Fallback = struct {
     pub fn played(f: *Fallback, gpa: std.mem.Allocator, path: []const u8) void {
         if (f.last_good) |p| if (std.mem.eql(u8, p, path)) return;
         const copy = gpa.dupe(u8, path) catch return; // keeps the older one
-        if (f.last_good) |p| gpa.free(p);
+        if (f.previous) |p| gpa.free(p);
+        f.previous = f.last_good;
         f.last_good = copy;
     }
 
@@ -54,10 +59,15 @@ pub const Fallback = struct {
             if (f.last_broken) |p| gpa.free(p);
             f.last_broken = copy;
         } else |_| {}
-        // It can't be the one to go back to.
+        // It can't be the one to go back to: the one before it is.
+        if (f.previous) |p| if (std.mem.eql(u8, p, path)) {
+            gpa.free(p);
+            f.previous = null;
+        };
         if (f.last_good) |p| if (std.mem.eql(u8, p, path)) {
             gpa.free(p);
-            f.last_good = null;
+            f.last_good = f.previous;
+            f.previous = null;
         };
     }
 
@@ -135,11 +145,15 @@ test "back to the last wallpaper that played, else zmural's own, never the broke
     defer gpa.free(once);
     try std.testing.expectEqualStrings("/v/broken.mp4", once);
 
-    // A file that played before and now can't (changed on disk): it is no
-    // longer the one to go back to.
+    // A file that played and now can't (cut short on disk while it played):
+    // it is no longer the one to go back to; the one before it is.
     f.failed(gpa, "/v/sea.mp4", "cannot play: unrecognized file format");
     gpa.free(f.take().?);
-    try std.testing.expectEqualStrings(prism, f.instead("/v/sea.mp4", prism).?);
+    try std.testing.expectEqualStrings("/v/rain.mp4", f.instead("/v/sea.mp4", prism).?);
+    // And if that breaks too, there is nothing older: zmural's own.
+    f.failed(gpa, "/v/rain.mp4", "cannot play: unrecognized file format");
+    gpa.free(f.take().?);
+    try std.testing.expectEqualStrings(prism, f.instead("/v/rain.mp4", prism).?);
 
     // zmural's own can't play either (no decoder for it): nothing else, no loop.
     try std.testing.expect(f.instead(prism, prism) == null);
@@ -160,4 +174,21 @@ test "the user is told once per broken file in a run" {
     try std.testing.expect(f.firstTime(gpa, "/w/a.mp4", false)); // on one monitor: another thing to say
     try std.testing.expect(!f.firstTime(gpa, "/w/a.mp4", false));
     try std.testing.expect(f.firstTime(gpa, "/w/b.mp4", true));
+}
+
+test "the one before the last is never the broken one either" {
+    const gpa = std.testing.allocator;
+    var f: Fallback = .{};
+    defer f.deinit(gpa);
+    const prism = "/opt/zmural/share/zmural/wallpapers/Prism.webm";
+    f.played(gpa, "/v/rain.mp4");
+    f.played(gpa, "/v/sea.mp4");
+    // The older one breaks (applied again, say) while the newer still plays.
+    f.failed(gpa, "/v/rain.mp4", "cannot play: unrecognized file format");
+    gpa.free(f.take().?);
+    try std.testing.expectEqualStrings("/v/sea.mp4", f.instead("/v/rain.mp4", prism).?);
+    // Then the newer breaks: nothing older is left to go back to.
+    f.failed(gpa, "/v/sea.mp4", "cannot play: unrecognized file format");
+    gpa.free(f.take().?);
+    try std.testing.expectEqualStrings(prism, f.instead("/v/sea.mp4", prism).?);
 }
