@@ -23,7 +23,9 @@ THE TRAY MENU
   Shuffle              play the library in a random order
   Rescan library       pick up files you just added
   Start with Windows   start zmural when you log in (on from the first
-                       run; Windows' Startup apps can turn it off too)
+                       run; Windows' Startup apps can turn it off too).
+                       Windows starts login apps one by one, so the
+                       wallpaper may take a minute or a few to appear.
   Settings...          the settings window: wallpapers, fill mode, volume,
                        library folders, pause rules (a left click opens it too)
                        Screen readers are not supported there: it draws its

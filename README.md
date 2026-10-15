@@ -167,6 +167,8 @@ Use **Uninstall** on the settings window's General page, or run `zmural-console 
 
 **A wallpaper doesn't play.** zmural shows a notification saying what was wrong and goes back to the last wallpaper that played (or Prism).
 
+**After logging in, the wallpaper takes a while to appear (Windows).** Windows starts the apps set to start at login one after another, and holds them back for a while after login so the desktop itself comes up first. zmural waits its turn like the rest: depending on how many apps start with Windows and how busy the PC is, that can be from under a minute to a few minutes. Once it runs, zmural shows the wallpaper within a second. Until then you see your normal Windows wallpaper. zmural doesn't jump the queue with a service or a scheduled task.
+
 **Windows warns before running zmural.** zmural isn't code-signed yet, so SmartScreen may warn about it.
 
 **Anything else:** the log usually says why. Open it from the settings window's General page, and include it in a report.
