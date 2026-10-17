@@ -31,7 +31,7 @@ pub fn forRenderer(
     var result: ?Action = null;
     for (ids[0..n], decided[0..n]) |id, a| {
         if (router.rendererFor(id) != renderer) continue;
-        result = if (result) |cur| (if (@intFromEnum(a) < @intFromEnum(cur)) a else cur) else a;
+        result = if (result) |cur| (if (@backingInt(a) < @backingInt(cur)) a else cur) else a;
     }
     var want = result orelse .none;
     if (user_paused) want = want.max(.pause);
@@ -66,7 +66,7 @@ fn names(w: *std.Io.Writer, set: policy.Conditions) usize {
 test "status gets the pausing and muting rules by name" {
     var buf: [256]u8 = undefined;
     const p = policy.Policy.default();
-    var active: policy.Conditions = .initEmpty();
+    var active: policy.Conditions = .empty;
     active.insert(.fullscreen);
     active.insert(.game_mode);
     active.insert(.other_audio);
@@ -74,7 +74,7 @@ test "status gets the pausing and muting rules by name" {
     const h = held(&buf, &p, active);
     try std.testing.expectEqualStrings("fullscreen, game_mode", h.paused_by);
     try std.testing.expectEqualStrings("other_audio", h.muted_by);
-    const none = held(&buf, &p, .initEmpty());
+    const none = held(&buf, &p, .empty);
     try std.testing.expectEqualStrings("", none.paused_by);
 }
 
@@ -88,9 +88,9 @@ test "a shared renderer plays while any of its monitors can see it" {
     _ = try r.assign(gpa, b, "x.mp4", 0);
 
     const p = policy.Policy.default();
-    var covered: policy.Conditions = .initEmpty();
+    var covered: policy.Conditions = .empty;
     covered.insert(.maximized);
-    const none: policy.Conditions = .initEmpty();
+    const none: policy.Conditions = .empty;
 
     const want = forRenderer(&p, none, &.{ a, b }, &.{ covered, none }, &r, id, false);
     try std.testing.expectEqual(Action.none, want);

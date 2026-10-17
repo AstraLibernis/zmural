@@ -453,7 +453,7 @@ fn applyWallpaper() void {
         const own = rt.own.get(id);
         const wallpaper = own orelse rt.wallpaper orelse continue;
         const fill = rt.fills.fillFor(id, rt.settings.fill);
-        const a = rt.router.assign(rt.gpa, id, wallpaper, @intFromEnum(fill)) catch |err| {
+        const a = rt.router.assign(rt.gpa, id, wallpaper, @backingInt(fill)) catch |err| {
             std.log.err("routing failed: {s}", .{@errorName(err)});
             continue;
         };
@@ -966,8 +966,8 @@ fn settingsInfo() control.Event {
     var rules: control.RuleActions = undefined;
     var exposed: control.RuleExposed = undefined;
     for (std.enums.values(zmural.policy.Condition)) |c| {
-        rules[@intFromEnum(c)] = rt.settings.policy.rules.get(c).action;
-        exposed[@intFromEnum(c)] = settings_file.isExposed(c);
+        rules[@backingInt(c)] = rt.settings.policy.rules.get(c).action;
+        exposed[@backingInt(c)] = settings_file.isExposed(c);
     }
     const third = reply_buf.len / 3;
     comptime std.debug.assert(third >= lists.max_joined_len); // lists are never cut short
@@ -1712,7 +1712,7 @@ fn stepWallpaper(forward: bool) ?[]const u8 {
 fn playing() bool {
     if (rt.settings.paused) return false;
     for (rt.renderers.items) |r| {
-        if (r.sup.state == .running and @intFromEnum(r.sup.applied) <= @intFromEnum(zmural.policy.Action.mute)) return true;
+        if (r.sup.state == .running and @backingInt(r.sup.applied) <= @backingInt(zmural.policy.Action.mute)) return true;
     }
     return false;
 }

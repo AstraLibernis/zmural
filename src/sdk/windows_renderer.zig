@@ -84,7 +84,7 @@ pub fn run(init: std.process.Init, kind: Kind, args_in: []const []const u8) !voi
         std.process.exit(2);
     };
     st.gpa = init.gpa;
-    st.path = try init.arena.allocator().dupeZ(u8, args.path);
+    st.path = try init.arena.allocator().dupeSentinel(u8, args.path, 0);
 
     _ = w.SetProcessDpiAwarenessContext(w.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     st.instance = w.GetModuleHandleW(null);

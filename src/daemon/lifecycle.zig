@@ -135,7 +135,7 @@ pub const Supervisor = struct {
             s.pending = null;
             return null;
         }
-        if (@intFromEnum(want) > @intFromEnum(s.applied)) {
+        if (@backingInt(want) > @backingInt(s.applied)) {
             s.pending = null;
             return s.apply(want);
         }

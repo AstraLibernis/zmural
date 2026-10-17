@@ -332,15 +332,15 @@ fn report(arena: std.mem.Allocator, out: *std.Io.Writer, reply: control.Event) !
             var pb: [600]u8 = undefined;
             var mb: [600]u8 = undefined;
             try out.print(
-            \\wallpaper : {s}
-            \\paused    : {s}
-            \\muted     : {s}
-            \\fill      : {s}
-            \\monitors  : {d}
-            \\library   : {d} wallpapers
-            \\order     : {s}
-            \\rotation  :
-        , .{ if (s.wallpaper.len == 0) "(none)" else s.wallpaper, held(&pb, s.paused, "by you", s.paused_by), held(&mb, s.muted, "the setting", s.muted_by), @tagName(s.fill), s.monitors, s.wallpapers, @tagName(s.order) });
+                \\wallpaper : {s}
+                \\paused    : {s}
+                \\muted     : {s}
+                \\fill      : {s}
+                \\monitors  : {d}
+                \\library   : {d} wallpapers
+                \\order     : {s}
+                \\rotation  :
+            , .{ if (s.wallpaper.len == 0) "(none)" else s.wallpaper, held(&pb, s.paused, "by you", s.paused_by), held(&mb, s.muted, "the setting", s.muted_by), @tagName(s.fill), s.monitors, s.wallpapers, @tagName(s.order) });
             if (s.rotate_minutes == 0) {
                 try out.writeAll(" off\n");
             } else {

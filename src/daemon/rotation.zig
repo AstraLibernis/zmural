@@ -166,7 +166,7 @@ test "shuffle shows every wallpaper once per round, never the current one twice 
     defer r.deinit(gpa);
     var cur: []const u8 = "/w/c"; // picked by hand
     for (0..6) |round| {
-        var seen = [_]bool{false} ** names.len;
+        var seen: [names.len]bool = @splat(false);
         for (0..names.len) |k| {
             const next = r.step(gpa, &lib, cur, .shuffle, true, 99).?;
             try std.testing.expect(!std.mem.eql(u8, next, cur));

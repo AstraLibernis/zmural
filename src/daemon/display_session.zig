@@ -58,7 +58,7 @@ pub const Session = struct {
     /// Single-plane XRGB8888 modifiers, as little-endian bytes (renderer protocol).
     modifiers: [max_modifiers * 8]u8 = undefined,
     modifiers_len: usize = 0,
-    conditions: policy.Conditions = .initEmpty(),
+    conditions: policy.Conditions = .empty,
 
     // The bound pool.
     generation: u64 = 0,
@@ -101,7 +101,7 @@ pub const Session = struct {
     /// Handles one frame from the consumer.
     pub fn handle(s: *Session, opcode: u16, body: []const u8) !Happening {
         var buf: [256]u8 = undefined;
-        const op: ww.Request = @enumFromInt(opcode);
+        const op: ww.Request = @fromBackingInt(@intCast(opcode));
         switch (s.state) {
             .hello => {
                 if (op != .hello) return s.refuse(.protocol_violation, "hello must be the first request");
@@ -187,7 +187,7 @@ pub const Session = struct {
     }
 
     fn setWindowFlags(s: *Session, flags: u32) void {
-        var c: policy.Conditions = .initEmpty();
+        var c: policy.Conditions = .empty;
         if (flags & ww.window.has_fullscreen != 0) c.insert(.fullscreen);
         if (flags & ww.window.has_maximized != 0) c.insert(.maximized);
         if (flags & ww.window.has_active != 0) c.insert(.focused);
@@ -278,7 +278,7 @@ pub const Session = struct {
     pub fn unbind(s: *Session) void {
         if (s.slots == 0) return;
         var buf: [64]u8 = undefined;
-        if (ww.encodeU64(&buf, @intFromEnum(ww.Event.unbind), s.generation)) |f| s.send(f, &.{}) else |_| {}
+        if (ww.encodeU64(&buf, @backingInt(ww.Event.unbind), s.generation)) |f| s.send(f, &.{}) else |_| {}
         s.dropPool();
     }
 
@@ -305,25 +305,25 @@ test "window flags reach the pause conditions by either request (the KDE plugin 
 
     var buf: [96]u8 = undefined;
     const fullscreen = try ww.encodeWindowObservationState(&buf, .{ .config_generation = observation_generation, .flags = ww.window.has_fullscreen });
-    try std.testing.expectEqual(Happening.window_state, try s.handle(@intFromEnum(ww.Request.set_window_observation_state), fullscreen[ww.header_len..]));
+    try std.testing.expectEqual(Happening.window_state, try s.handle(@backingInt(ww.Request.set_window_observation_state), fullscreen[ww.header_len..]));
     try std.testing.expect(s.conditions.contains(.fullscreen));
     try std.testing.expect(!s.conditions.contains(.maximized));
 
     // A report against another config generation changes nothing.
     const stale = try ww.encodeWindowObservationState(&buf, .{ .config_generation = observation_generation + 1, .flags = 0 });
-    try std.testing.expectEqual(Happening.none, try s.handle(@intFromEnum(ww.Request.set_window_observation_state), stale[ww.header_len..]));
+    try std.testing.expectEqual(Happening.none, try s.handle(@backingInt(ww.Request.set_window_observation_state), stale[ww.header_len..]));
     try std.testing.expect(s.conditions.contains(.fullscreen));
 
     const cleared = try ww.encodeWindowObservationState(&buf, .{ .config_generation = observation_generation, .flags = ww.window.has_maximized });
-    _ = try s.handle(@intFromEnum(ww.Request.set_window_observation_state), cleared[ww.header_len..]);
+    _ = try s.handle(@backingInt(ww.Request.set_window_observation_state), cleared[ww.header_len..]);
     try std.testing.expect(!s.conditions.contains(.fullscreen));
     try std.testing.expect(s.conditions.contains(.maximized));
 
     // The plain request still works (clients without observation).
     var plain: [4]u8 = undefined;
     std.mem.writeInt(u32, &plain, ww.window.has_fullscreen, .little);
-    _ = try s.handle(@intFromEnum(ww.Request.set_window_state), &plain);
+    _ = try s.handle(@backingInt(ww.Request.set_window_state), &plain);
     try std.testing.expect(s.conditions.contains(.fullscreen));
 
-    try std.testing.expectError(error.Refused, s.handle(@intFromEnum(ww.Request.set_window_observation_state), plain[0..2]));
+    try std.testing.expectError(error.Refused, s.handle(@backingInt(ww.Request.set_window_observation_state), plain[0..2]));
 }

@@ -72,7 +72,7 @@ test "a write to a peer that stops reading times out instead of hanging (audit L
     var client = try pipe.connect(gpa, name, 1000);
     defer client.close();
     server.write_timeout_ms = 200;
-    const chunk = [_]u8{0x55} ** 16384;
+    const chunk: [16384]u8 = @splat(0x55);
     var err: ?pipe.Error = null;
     // The pipe buffers 64 KiB; far more than that can never be written while nobody reads.
     for (0..64) |_| server.writeAll(&chunk) catch |e| {

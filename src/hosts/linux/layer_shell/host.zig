@@ -245,7 +245,7 @@ pub const Host = struct {
         }
         if (h.globals.dmabuf != 0) {
             h.feedback_object = h.conn.newId();
-            try h.conn.request(h.globals.dmabuf, @intFromEnum(p.zwp_linux_dmabuf_v1.request.get_default_feedback), &.{.{ .new_id = h.feedback_object }});
+            try h.conn.request(h.globals.dmabuf, @backingInt(p.zwp_linux_dmabuf_v1.request.get_default_feedback), &.{.{ .new_id = h.feedback_object }});
             try h.handlers.put(h.gpa, h.feedback_object, .feedback);
         }
         try h.roundtrip(); // the outputs' first events, and the dmabuf feedback
@@ -278,7 +278,7 @@ pub const Host = struct {
             .registry => try h.onRegistry(e),
             .output => |o| try h.onOutput(o, e),
             .layer_surface => |o| try h.onLayerSurface(o, e),
-            .buffer => |b| if (e.opcode == @intFromEnum(p.wl_buffer.event.release)) {
+            .buffer => |b| if (e.opcode == @backingInt(p.wl_buffer.event.release)) {
                 b.output.slots[b.slot].busy = false;
                 if (h.listener) |l| l.released(l.ctx, b.output, b.slot);
             },
@@ -387,7 +387,7 @@ pub const Host = struct {
             },
             .closed => {
                 _ = h.handlers.remove(t.handle);
-                try h.conn.request(t.handle, @intFromEnum(T.request.destroy), &.{});
+                try h.conn.request(t.handle, @backingInt(T.request.destroy), &.{});
                 if (std.mem.findScalar(*Toplevel, h.toplevels.items, t)) |i| _ = h.toplevels.swapRemove(i);
                 h.gpa.destroy(t);
                 h.reportWindowStates();
@@ -512,31 +512,31 @@ pub const Host = struct {
         const c = &h.conn;
         const g = h.globals;
         o.surface = c.newId();
-        try c.request(g.compositor, @intFromEnum(p.wl_compositor.request.create_surface), &.{.{ .new_id = o.surface }});
+        try c.request(g.compositor, @backingInt(p.wl_compositor.request.create_surface), &.{.{ .new_id = o.surface }});
         o.content = c.newId();
-        try c.request(g.compositor, @intFromEnum(p.wl_compositor.request.create_surface), &.{.{ .new_id = o.content }});
+        try c.request(g.compositor, @backingInt(p.wl_compositor.request.create_surface), &.{.{ .new_id = o.content }});
 
         // The desktop's clicks and keys are not ours: empty input regions.
         const region = c.newId();
-        try c.request(g.compositor, @intFromEnum(p.wl_compositor.request.create_region), &.{.{ .new_id = region }});
+        try c.request(g.compositor, @backingInt(p.wl_compositor.request.create_region), &.{.{ .new_id = region }});
         for ([_]wl.ObjectId{ o.surface, o.content }) |s|
-            try c.request(s, @intFromEnum(p.wl_surface.request.set_input_region), &.{.{ .object = region }});
-        try c.request(region, @intFromEnum(p.wl_region.request.destroy), &.{});
+            try c.request(s, @backingInt(p.wl_surface.request.set_input_region), &.{.{ .object = region }});
+        try c.request(region, @backingInt(p.wl_region.request.destroy), &.{});
 
         o.subsurface = c.newId();
-        try c.request(g.subcompositor, @intFromEnum(p.wl_subcompositor.request.get_subsurface), &.{
+        try c.request(g.subcompositor, @backingInt(p.wl_subcompositor.request.get_subsurface), &.{
             .{ .new_id = o.subsurface }, .{ .object = o.content }, .{ .object = o.surface },
         });
         // Frames arrive on their own clock, not the parent's commits.
-        try c.request(o.subsurface, @intFromEnum(p.wl_subsurface.request.set_desync), &.{});
+        try c.request(o.subsurface, @backingInt(p.wl_subsurface.request.set_desync), &.{});
 
         o.background_viewport = c.newId();
-        try c.request(g.viewporter, @intFromEnum(p.wp_viewporter.request.get_viewport), &.{ .{ .new_id = o.background_viewport }, .{ .object = o.surface } });
+        try c.request(g.viewporter, @backingInt(p.wp_viewporter.request.get_viewport), &.{ .{ .new_id = o.background_viewport }, .{ .object = o.surface } });
         o.content_viewport = c.newId();
-        try c.request(g.viewporter, @intFromEnum(p.wp_viewporter.request.get_viewport), &.{ .{ .new_id = o.content_viewport }, .{ .object = o.content } });
+        try c.request(g.viewporter, @backingInt(p.wp_viewporter.request.get_viewport), &.{ .{ .new_id = o.content_viewport }, .{ .object = o.content } });
 
         o.layer_surface = c.newId();
-        try c.request(g.layer_shell, @intFromEnum(p.zwlr_layer_shell_v1.request.get_layer_surface), &.{
+        try c.request(g.layer_shell, @backingInt(p.zwlr_layer_shell_v1.request.get_layer_surface), &.{
             .{ .new_id = o.layer_surface },
             .{ .object = o.surface },
             .{ .object = o.wl_output },
@@ -545,12 +545,12 @@ pub const Host = struct {
         });
         try h.handlers.put(h.gpa, o.layer_surface, .{ .layer_surface = o });
         const ls = o.layer_surface;
-        try c.request(ls, @intFromEnum(p.zwlr_layer_surface_v1.request.set_anchor), &.{.{ .uint = p.zwlr_layer_surface_v1.anchor_all }});
+        try c.request(ls, @backingInt(p.zwlr_layer_surface_v1.request.set_anchor), &.{.{ .uint = p.zwlr_layer_surface_v1.anchor_all }});
         // -1: cover the whole output, panels included.
-        try c.request(ls, @intFromEnum(p.zwlr_layer_surface_v1.request.set_exclusive_zone), &.{.{ .int = -1 }});
-        try c.request(ls, @intFromEnum(p.zwlr_layer_surface_v1.request.set_keyboard_interactivity), &.{.{ .uint = 0 }});
+        try c.request(ls, @backingInt(p.zwlr_layer_surface_v1.request.set_exclusive_zone), &.{.{ .int = -1 }});
+        try c.request(ls, @backingInt(p.zwlr_layer_surface_v1.request.set_keyboard_interactivity), &.{.{ .uint = 0 }});
         // The first commit carries no buffer; the compositor answers with configure.
-        try c.request(o.surface, @intFromEnum(p.wl_surface.request.commit), &.{});
+        try c.request(o.surface, @backingInt(p.wl_surface.request.commit), &.{});
     }
 
     fn onLayerSurface(h: *Host, o: *Output, e: *wl.Event) !void {
@@ -559,7 +559,7 @@ pub const Host = struct {
                 const serial = try e.args.uint();
                 const width = try e.args.uint();
                 const height = try e.args.uint();
-                try h.conn.request(o.layer_surface, @intFromEnum(p.zwlr_layer_surface_v1.request.ack_configure), &.{.{ .uint = serial }});
+                try h.conn.request(o.layer_surface, @backingInt(p.zwlr_layer_surface_v1.request.ack_configure), &.{.{ .uint = serial }});
                 const first = !o.configured();
                 o.logical_w = width;
                 o.logical_h = height;
@@ -581,13 +581,13 @@ pub const Host = struct {
 
     fn paintBackground(h: *Host, o: *Output) !void {
         const c = &h.conn;
-        if (o.background_buffer != 0) try c.request(o.background_buffer, @intFromEnum(p.wl_buffer.request.destroy), &.{});
+        if (o.background_buffer != 0) try c.request(o.background_buffer, @backingInt(p.wl_buffer.request.destroy), &.{});
         const rgba = o.clear_rgba;
         if (h.globals.single_pixel != 0) {
             o.background_buffer = c.newId();
             // The single-pixel buffer takes each channel as a full 32-bit value.
             const scale = 0x01010101;
-            try c.request(h.globals.single_pixel, @intFromEnum(p.wp_single_pixel_buffer_manager_v1.request.create_u32_rgba_buffer), &.{
+            try c.request(h.globals.single_pixel, @backingInt(p.wp_single_pixel_buffer_manager_v1.request.create_u32_rgba_buffer), &.{
                 .{ .new_id = o.background_buffer },
                 .{ .uint = (rgba >> 24 & 0xff) * scale },
                 .{ .uint = (rgba >> 16 & 0xff) * scale },
@@ -597,10 +597,10 @@ pub const Host = struct {
         } else {
             o.background_buffer = try h.onePixel(rgba >> 8);
         }
-        try c.request(o.background_viewport, @intFromEnum(p.wp_viewport.request.set_destination), &.{ .{ .int = @intCast(o.logical_w) }, .{ .int = @intCast(o.logical_h) } });
-        try c.request(o.surface, @intFromEnum(p.wl_surface.request.attach), &.{ .{ .object = o.background_buffer }, .{ .int = 0 }, .{ .int = 0 } });
-        try c.request(o.surface, @intFromEnum(p.wl_surface.request.damage_buffer), &.{ .{ .int = 0 }, .{ .int = 0 }, .{ .int = 1 }, .{ .int = 1 } });
-        try c.request(o.surface, @intFromEnum(p.wl_surface.request.commit), &.{});
+        try c.request(o.background_viewport, @backingInt(p.wp_viewport.request.set_destination), &.{ .{ .int = @intCast(o.logical_w) }, .{ .int = @intCast(o.logical_h) } });
+        try c.request(o.surface, @backingInt(p.wl_surface.request.attach), &.{ .{ .object = o.background_buffer }, .{ .int = 0 }, .{ .int = 0 } });
+        try c.request(o.surface, @backingInt(p.wl_surface.request.damage_buffer), &.{ .{ .int = 0 }, .{ .int = 0 }, .{ .int = 1 }, .{ .int = 1 } });
+        try c.request(o.surface, @backingInt(p.wl_surface.request.commit), &.{});
     }
 
     /// Makes `slot`'s buffer the output's buffer. Records the buffer ids the
@@ -620,7 +620,7 @@ pub const Host = struct {
     pub fn dropBuffers(h: *Host, o: *Output) !void {
         for (&o.slots) |*s| if (s.buffer != 0) {
             _ = h.handlers.remove(s.buffer);
-            try h.conn.request(s.buffer, @intFromEnum(p.wl_buffer.request.destroy), &.{});
+            try h.conn.request(s.buffer, @backingInt(p.wl_buffer.request.destroy), &.{});
             s.* = .{};
         };
         o.shown = null;
@@ -669,22 +669,22 @@ pub const Host = struct {
         const dw: i32 = @max(1, @as(i32, @intFromFloat(@round(@as(f64, @floatFromInt(comp.dst.w)) * sx))));
         const dh: i32 = @max(1, @as(i32, @intFromFloat(@round(@as(f64, @floatFromInt(comp.dst.h)) * sy))));
 
-        try c.request(o.subsurface, @intFromEnum(p.wl_subsurface.request.set_position), &.{ .{ .int = dx }, .{ .int = dy } });
-        try c.request(o.content_viewport, @intFromEnum(p.wp_viewport.request.set_source), &.{
+        try c.request(o.subsurface, @backingInt(p.wl_subsurface.request.set_position), &.{ .{ .int = dx }, .{ .int = dy } });
+        try c.request(o.content_viewport, @backingInt(p.wp_viewport.request.set_source), &.{
             .{ .fixed = wl.fixed(@floatFromInt(comp.src.x)) },
             .{ .fixed = wl.fixed(@floatFromInt(comp.src.y)) },
             .{ .fixed = wl.fixed(@floatFromInt(comp.src.w)) },
             .{ .fixed = wl.fixed(@floatFromInt(comp.src.h)) },
         });
-        try c.request(o.content_viewport, @intFromEnum(p.wp_viewport.request.set_destination), &.{ .{ .int = dw }, .{ .int = dh } });
-        try c.request(o.content, @intFromEnum(p.wl_surface.request.attach), &.{ .{ .object = o.slots[slot].buffer }, .{ .int = 0 }, .{ .int = 0 } });
-        try c.request(o.content, @intFromEnum(p.wl_surface.request.damage_buffer), &.{ .{ .int = 0 }, .{ .int = 0 }, .{ .int = std.math.maxInt(i32) }, .{ .int = std.math.maxInt(i32) } });
+        try c.request(o.content_viewport, @backingInt(p.wp_viewport.request.set_destination), &.{ .{ .int = dw }, .{ .int = dh } });
+        try c.request(o.content, @backingInt(p.wl_surface.request.attach), &.{ .{ .object = o.slots[slot].buffer }, .{ .int = 0 }, .{ .int = 0 } });
+        try c.request(o.content, @backingInt(p.wl_surface.request.damage_buffer), &.{ .{ .int = 0 }, .{ .int = 0 }, .{ .int = std.math.maxInt(i32) }, .{ .int = std.math.maxInt(i32) } });
         o.frame_callback = c.newId();
-        try c.request(o.content, @intFromEnum(p.wl_surface.request.frame), &.{.{ .new_id = o.frame_callback }});
+        try c.request(o.content, @backingInt(p.wl_surface.request.frame), &.{.{ .new_id = o.frame_callback }});
         try h.handlers.put(h.gpa, o.frame_callback, .{ .frame = o });
-        try c.request(o.content, @intFromEnum(p.wl_surface.request.commit), &.{});
+        try c.request(o.content, @backingInt(p.wl_surface.request.commit), &.{});
         // The parent commits too, so the new subsurface position applies.
-        try c.request(o.surface, @intFromEnum(p.wl_surface.request.commit), &.{});
+        try c.request(o.surface, @backingInt(p.wl_surface.request.commit), &.{});
         // The previous buffer stays busy until the compositor releases it.
         o.shown = slot;
     }
@@ -697,15 +697,15 @@ pub const Host = struct {
         _ = h.handlers.remove(o.wl_output);
         if (o.layer_surface != 0) {
             _ = h.handlers.remove(o.layer_surface);
-            try c.request(o.layer_surface, @intFromEnum(p.zwlr_layer_surface_v1.request.destroy), &.{});
-            try c.request(o.subsurface, @intFromEnum(p.wl_subsurface.request.destroy), &.{});
-            try c.request(o.content_viewport, @intFromEnum(p.wp_viewport.request.destroy), &.{});
-            try c.request(o.background_viewport, @intFromEnum(p.wp_viewport.request.destroy), &.{});
-            try c.request(o.content, @intFromEnum(p.wl_surface.request.destroy), &.{});
-            try c.request(o.surface, @intFromEnum(p.wl_surface.request.destroy), &.{});
-            if (o.background_buffer != 0) try c.request(o.background_buffer, @intFromEnum(p.wl_buffer.request.destroy), &.{});
+            try c.request(o.layer_surface, @backingInt(p.zwlr_layer_surface_v1.request.destroy), &.{});
+            try c.request(o.subsurface, @backingInt(p.wl_subsurface.request.destroy), &.{});
+            try c.request(o.content_viewport, @backingInt(p.wp_viewport.request.destroy), &.{});
+            try c.request(o.background_viewport, @backingInt(p.wp_viewport.request.destroy), &.{});
+            try c.request(o.content, @backingInt(p.wl_surface.request.destroy), &.{});
+            try c.request(o.surface, @backingInt(p.wl_surface.request.destroy), &.{});
+            if (o.background_buffer != 0) try c.request(o.background_buffer, @backingInt(p.wl_buffer.request.destroy), &.{});
         }
-        try c.request(o.wl_output, @intFromEnum(p.wl_output.request.release), &.{});
+        try c.request(o.wl_output, @backingInt(p.wl_output.request.release), &.{});
         h.gpa.destroy(o);
     }
 
@@ -727,13 +727,13 @@ pub const Host = struct {
     pub fn addShmBuffer(h: *Host, fd: linux.fd_t, size: u32, width: u32, height: u32, stride: u32) !wl.ObjectId {
         const c = &h.conn;
         const pool = c.newId();
-        try c.request(h.globals.shm, @intFromEnum(p.wl_shm.request.create_pool), &.{ .{ .new_id = pool }, .{ .fd = fd }, .{ .int = @intCast(size) } });
+        try c.request(h.globals.shm, @backingInt(p.wl_shm.request.create_pool), &.{ .{ .new_id = pool }, .{ .fd = fd }, .{ .int = @intCast(size) } });
         const buffer = c.newId();
-        try c.request(pool, @intFromEnum(p.wl_shm_pool.request.create_buffer), &.{
+        try c.request(pool, @backingInt(p.wl_shm_pool.request.create_buffer), &.{
             .{ .new_id = buffer },        .{ .int = 0 },                .{ .int = @intCast(width) },
             .{ .int = @intCast(height) }, .{ .int = @intCast(stride) }, .{ .uint = p.wl_shm.format_xrgb8888 },
         });
-        try c.request(pool, @intFromEnum(p.wl_shm_pool.request.destroy), &.{});
+        try c.request(pool, @backingInt(p.wl_shm_pool.request.destroy), &.{});
         return buffer;
     }
 
@@ -744,16 +744,16 @@ pub const Host = struct {
         if (h.globals.dmabuf == 0) return error.Unsupported;
         const c = &h.conn;
         const params = c.newId();
-        try c.request(h.globals.dmabuf, @intFromEnum(p.zwp_linux_dmabuf_v1.request.create_params), &.{.{ .new_id = params }});
-        try c.request(params, @intFromEnum(p.zwp_linux_buffer_params_v1.request.add), &.{
+        try c.request(h.globals.dmabuf, @backingInt(p.zwp_linux_dmabuf_v1.request.create_params), &.{.{ .new_id = params }});
+        try c.request(params, @backingInt(p.zwp_linux_buffer_params_v1.request.add), &.{
             .{ .fd = fd },                          .{ .uint = 0 },                   .{ .uint = offset }, .{ .uint = stride },
             .{ .uint = @truncate(modifier >> 32) }, .{ .uint = @truncate(modifier) },
         });
         const buffer = c.newId();
-        try c.request(params, @intFromEnum(p.zwp_linux_buffer_params_v1.request.create_immed), &.{
+        try c.request(params, @backingInt(p.zwp_linux_buffer_params_v1.request.create_immed), &.{
             .{ .new_id = buffer }, .{ .int = @intCast(width) }, .{ .int = @intCast(height) }, .{ .uint = fourcc }, .{ .uint = 0 },
         });
-        try c.request(params, @intFromEnum(p.zwp_linux_buffer_params_v1.request.destroy), &.{});
+        try c.request(params, @backingInt(p.zwp_linux_buffer_params_v1.request.destroy), &.{});
         return buffer;
     }
 };

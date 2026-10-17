@@ -102,7 +102,7 @@ pub fn run(init: std.process.Init, kind: Kind, args_in: []const []const u8) !voi
         std.process.exit(2);
     };
     st.gpa = init.gpa;
-    st.path = try init.arena.allocator().dupeZ(u8, args.path);
+    st.path = try init.arena.allocator().dupeSentinel(u8, args.path, 0);
     // Hash the path: the content token only changes when the wallpaper does.
     st.content_token = std.hash.Wyhash.hash(0, args.path);
 

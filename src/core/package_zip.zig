@@ -695,11 +695,11 @@ test safeComponent {
 test safePath {
     try std.testing.expect(safePath("pkg/zmural.toml"));
     try std.testing.expect(safePath("pkg/"));
-    for ([_][]const u8{ "/etc/passwd", "../x", "a/../../x", "a//b", "a/./b", "C:/x", "a/b/", "x" ** 513 }) |bad| {
+    for ([_][]const u8{ "/etc/passwd", "../x", "a/../../x", "a//b", "a/./b", "C:/x", "a/b/", repeat("x", 513) }) |bad| {
         if (std.mem.eql(u8, bad, "a/b/")) continue; // a directory: fine
         try std.testing.expect(!safePath(bad));
     }
-    try std.testing.expect(!safePath("a/" ** 17 ++ "f"));
+    try std.testing.expect(!safePath(repeat("a/", 17) ++ "f"));
 }
 
 test commonRoot {
@@ -946,7 +946,7 @@ test "an exported package imports back the same, and a single file on its own" {
     const root = root_buf[0..try tmp.dir.realPath(io, &root_buf)];
     try tmp.dir.createDirPath(io, "lib/Neon/media");
     try tmp.dir.writeFile(io, .{ .sub_path = "lib/Neon/zmural.toml", .data = "title = \"Neon\"\ntype = \"image\"\nentry = \"media/a.png\"\n" });
-    try tmp.dir.writeFile(io, .{ .sub_path = "lib/Neon/media/a.png", .data = "pixels" ** 1000 });
+    try tmp.dir.writeFile(io, .{ .sub_path = "lib/Neon/media/a.png", .data = repeat("pixels", 1000) });
     var diag: Diagnostic = .{};
     const zip_path = try std.fs.path.join(a, &.{ root, "neon.zip" });
     const res = try exportTo(std.testing.allocator, io, try std.fs.path.join(a, &.{ root, "lib/Neon/zmural.toml" }), zip_path, .{}, &diag);
@@ -965,7 +965,7 @@ test "an exported package imports back the same, and a single file on its own" {
     defer back.close(io);
     try std.testing.expectEqualStrings("Neon", (try unpack(a, io, &fr, checked, back, "Neon", &diag)).name);
     const copy = try back.readFileAlloc(io, "Neon/media/a.png", a, .unlimited);
-    try std.testing.expectEqualStrings("pixels" ** 1000, copy);
+    try std.testing.expectEqualStrings(repeat("pixels", 1000), copy);
 
     // One file: no top folder; a folder with nothing playable is refused.
     _ = try exportTo(std.testing.allocator, io, try std.fs.path.join(a, &.{ root, "lib/Neon/media/a.png" }), try std.fs.path.join(a, &.{ root, "one.zip" }), .{}, &diag);
@@ -974,4 +974,14 @@ test "an exported package imports back the same, and a single file on its own" {
     try std.testing.expectError(error.NotAWallpaper, exportTo(std.testing.allocator, io, try std.fs.path.join(a, &.{ root, "notes" }), try std.fs.path.join(a, &.{ root, "n.zip" }), .{}, &diag));
     try std.testing.expectError(error.FileNotFound, tmp.dir.access(io, "n.zip", .{}));
     try std.testing.expectError(error.FileNotFound, tmp.dir.access(io, "n.zip.part", .{}));
+}
+
+/// Comptime string repeat (the ** array operator was removed in Zig 0.17).
+fn repeat(comptime s: []const u8, comptime n: usize) *const [s.len * n]u8 {
+    const arr: [s.len * n]u8 = comptime blk: {
+        var out: [s.len * n]u8 = undefined;
+        for (0..n) |i| @memcpy(out[i * s.len ..][0..s.len], s);
+        break :blk out;
+    };
+    return &arr;
 }

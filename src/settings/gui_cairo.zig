@@ -140,9 +140,10 @@ const Libs = struct {
 
 fn loadTable(comptime T: type, lib: *std.DynLib, comptime prefix: []const u8) !T {
     var t: T = undefined;
-    inline for (@typeInfo(T).@"struct".fields) |f| {
-        @field(t, f.name) = lib.lookup(f.type, prefix ++ f.name) orelse {
-            std.log.err("{s}{s} is missing", .{ prefix, f.name });
+    const info = @typeInfo(T).@"struct";
+    inline for (info.field_names, info.field_types) |f_name, F_type| {
+        @field(t, f_name) = lib.lookup(F_type, prefix ++ f_name) orelse {
+            std.log.err("{s}{s} is missing", .{ prefix, f_name });
             return error.SymbolMissing;
         };
     }

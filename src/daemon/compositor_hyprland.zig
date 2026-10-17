@@ -96,7 +96,7 @@ pub fn factsFrom(gpa: std.mem.Allocator, clients_json: []const u8, monitors_json
         @memcpy(f.names[i][0..m.name.len], m.name);
         f.name_lens[i] = m.name.len;
 
-        var c: policy.Conditions = .initEmpty();
+        var c: policy.Conditions = .empty;
         var shown: [64]Rect = undefined;
         var n_shown: usize = 0;
         for (clients) |*cl| {

@@ -33,8 +33,8 @@ pub const Window = struct {
 };
 
 pub const Snapshot = struct {
-    system: Conditions = Conditions.initEmpty(),
-    monitors: [monitors.max]Conditions = @splat(Conditions.initEmpty()),
+    system: Conditions = Conditions.empty,
+    monitors: [monitors.max]Conditions = @splat(Conditions.empty),
     count: usize = 0,
     /// The foreground app's executable name (WTF-8), for logs and app rules.
     foreground_exe: [max_exe_name]u8 = undefined,
@@ -78,7 +78,7 @@ pub fn hidesDesktop(a: Attrs) bool {
 
 /// Per-monitor conditions from the windows that hide the desktop.
 pub fn deriveMonitor(monitor: Rect, windows: []const Window) Conditions {
-    var set = Conditions.initEmpty();
+    var set = Conditions.empty;
     var on_monitor: [max_windows]Rect = undefined;
     var n: usize = 0;
     for (windows) |win| {
@@ -280,7 +280,7 @@ pub fn isRelevant(event: w.DWORD, hwnd: ?w.HWND, id_object: i32, id_child: i32) 
 
 fn testAttrs(overrides: anytype) Attrs {
     var a: Attrs = .{ .visible = true, .minimized = false, .cloaked = false, .own_process = false, .ex_style = 0, .class = "Notepad", .width = 800, .height = 600 };
-    inline for (@typeInfo(@TypeOf(overrides)).@"struct".fields) |f| @field(a, f.name) = @field(overrides, f.name);
+    inline for (@typeInfo(@TypeOf(overrides)).@"struct".field_names) |f_name| @field(a, f_name) = @field(overrides, f_name);
     return a;
 }
 

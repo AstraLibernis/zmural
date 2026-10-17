@@ -37,7 +37,7 @@ pub const Action = enum(u8) {
     stop,
 
     pub fn max(a: Action, b: Action) Action {
-        return if (@intFromEnum(a) >= @intFromEnum(b)) a else b;
+        return if (@backingInt(a) >= @backingInt(b)) a else b;
     }
 };
 
@@ -100,7 +100,7 @@ pub const Policy = struct {
     /// Of the `active` conditions, those whose rule is one of `actions`: what
     /// is holding the wallpaper back, for `status`.
     pub fn ruledBy(p: *const Policy, active: Conditions, actions: []const Action) Conditions {
-        var out = Conditions.initEmpty();
+        var out = Conditions.empty;
         var it = active.iterator();
         while (it.next()) |c| {
             if (std.mem.findScalar(Action, actions, p.rules.get(c).action) != null) out.insert(c);
@@ -110,7 +110,7 @@ pub const Policy = struct {
 };
 
 fn set(cs: []const Condition) Conditions {
-    var s = Conditions.initEmpty();
+    var s = Conditions.empty;
     for (cs) |c| s.insert(c);
     return s;
 }

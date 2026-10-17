@@ -86,7 +86,7 @@ fn fromHash(hash: u64) Id {
 }
 
 fn testEdid() [128]u8 {
-    var b = [_]u8{0} ** 128;
+    var b: [128]u8 = @splat(0);
     b[0..8].* = .{ 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 };
     b[8] = 0x10; // "DEL" = 4,5,12 packed as 5-bit letters
     b[9] = 0xAC;

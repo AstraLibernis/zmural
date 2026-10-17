@@ -124,7 +124,7 @@ pub const Links = struct {
         const l = ls.find(o) orelse return;
         if (!l.registered) return;
         var buf: [16]u8 = undefined;
-        const f = ww.encodeU32(&buf, @intFromEnum(ww.Request.set_window_state), windowFlags(ws)) catch return;
+        const f = ww.encodeU32(&buf, @backingInt(ww.Request.set_window_state), windowFlags(ws)) catch return;
         ls.send(l, f, &.{});
     }
 
@@ -256,7 +256,7 @@ pub const Links = struct {
         defer for (fds[kept..]) |fd| {
             _ = linux.close(fd);
         };
-        switch (@as(ww.Event, @enumFromInt(opcode))) {
+        switch (@as(ww.Event, @fromBackingInt(@intCast(opcode)))) {
             .welcome => {
                 log.info("{s}: connected to {s}", .{ o.connector(), ww.decodeWelcome(body) catch "?" });
                 ls.register(l);
@@ -329,7 +329,7 @@ pub const Links = struct {
                     l.generation = 0;
                 }
                 var buf: [16]u8 = undefined;
-                ls.send(l, try ww.encodeU64(&buf, @intFromEnum(ww.Request.ack_unbind), gen), &.{});
+                ls.send(l, try ww.encodeU64(&buf, @backingInt(ww.Request.ack_unbind), gen), &.{});
             },
             .@"error" => {
                 var r: ww.Reader = .{ .body = body };

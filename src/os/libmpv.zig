@@ -79,13 +79,15 @@ pub const Api = struct {
         var lib = std.DynLib.open("libmpv.so.2") catch return error.LibraryNotFound;
         errdefer lib.close();
         var api: Api = undefined;
-        inline for (@typeInfo(Api).@"struct".fields) |f| {
-            @field(api, f.name) = lib.lookup(f.type, "mpv_" ++ f.name) orelse return error.SymbolMissing;
+        const api_info = @typeInfo(Api).@"struct";
+        inline for (api_info.field_names, api_info.field_types) |f_name, F_type| {
+            @field(api, f_name) = lib.lookup(F_type, "mpv_" ++ f_name) orelse return error.SymbolMissing;
         }
         if (api.client_api_version() >> 16 != 2) return error.UnsupportedVersion;
         var render: RenderApi = undefined;
-        inline for (@typeInfo(RenderApi).@"struct".fields) |f| {
-            @field(render, f.name) = lib.lookup(f.type, "mpv_render_context_" ++ f.name) orelse return error.SymbolMissing;
+        const render_info = @typeInfo(RenderApi).@"struct";
+        inline for (render_info.field_names, render_info.field_types) |f_name, F_type| {
+            @field(render, f_name) = lib.lookup(F_type, "mpv_render_context_" ++ f_name) orelse return error.SymbolMissing;
         }
         return .{ api, render };
     }
@@ -94,9 +96,9 @@ pub const Api = struct {
         const lib = w.LoadLibraryW(path) orelse return error.LibraryNotFound;
         errdefer _ = w.FreeLibrary(lib);
         var api: Api = undefined;
-        inline for (@typeInfo(Api).@"struct".fields) |f| {
-            const sym = w.GetProcAddress(lib, "mpv_" ++ f.name) orelse return error.SymbolMissing;
-            @field(api, f.name) = @ptrCast(sym); // zsnag:ok — signature declared from mpv's client.h
+        inline for (@typeInfo(Api).@"struct".field_names) |f_name| {
+            const sym = w.GetProcAddress(lib, "mpv_" ++ f_name) orelse return error.SymbolMissing;
+            @field(api, f_name) = @ptrCast(sym); // zsnag:ok — signature declared from mpv's client.h
         }
         // Major version 2 is the stable client API this binding was written against.
         if (api.client_api_version() >> 16 != 2) return error.UnsupportedVersion;

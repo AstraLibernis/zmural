@@ -100,7 +100,7 @@ test "only picture adjustments and speed reach mpv, as plain numbers" {
     // Not on the list, or not a number: ignored.
     for ([_][2][]const u8{
         .{ "script", "\"/tmp/x.lua\"" }, .{ "stream-record", "\"/tmp/out\"" }, .{ "vo", "\"null\"" },
-        .{ "brightness", "\"yes\"" },    .{ "hue", "nan" },                      .{ "gamma", "1e999" },
+        .{ "brightness", "\"yes\"" },    .{ "hue", "nan" },                    .{ "gamma", "1e999" },
         .{ "", "1" },
     }) |bad| try std.testing.expectEqual(@as(?usize, null), a.put(bad[0], bad[1]));
     try std.testing.expectEqualStrings("-20", a.value(1).?);

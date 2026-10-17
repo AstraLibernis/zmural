@@ -24,7 +24,7 @@ pub const capabilities = "control.v1 apply playback mute rescan settings library
 pub const list_sep = 0;
 
 /// One action per `policy.Condition`, indexed by its tag value.
-pub const RuleActions = [@typeInfo(policy.Condition).@"enum".fields.len]policy.Action;
+pub const RuleActions = [@typeInfo(policy.Condition).@"enum".field_names.len]policy.Action;
 
 /// An empty monitor ID means "all monitors".
 pub const Target = struct { monitor: []const u8 = "" };
@@ -184,7 +184,7 @@ pub const SettingsInfo = struct {
     /// The settings file, for "open in an editor".
     file: []const u8,
 };
-pub const RuleExposed = [@typeInfo(policy.Condition).@"enum".fields.len]bool;
+pub const RuleExposed = [@typeInfo(policy.Condition).@"enum".field_names.len]bool;
 /// `paths` holds library entries `offset ..` (list-separated); `total` is the library size.
 pub const Library = struct { total: u32, offset: u32, paths: []const u8 };
 /// `list` is `core/properties.writeList` output; `title` is empty when the
@@ -252,9 +252,9 @@ test "settings travel with every rule and list" {
     const wire = @import("wire.zig");
     var buf: [512]u8 = undefined;
     var rules: RuleActions = @splat(.none);
-    rules[@intFromEnum(policy.Condition.fullscreen)] = .stop;
+    rules[@backingInt(policy.Condition.fullscreen)] = .stop;
     var exposed: RuleExposed = @splat(false);
-    exposed[@intFromEnum(policy.Condition.on_battery)] = true;
+    exposed[@backingInt(policy.Condition.on_battery)] = true;
     const ev: Event = .{ .settings = .{
         .fill = .fit,
         .volume = 35,
@@ -271,9 +271,9 @@ test "settings travel with every rule and list" {
         .file = "C:\\Users\\me\\AppData\\Roaming\\zmural\\settings.toml",
     } };
     const back = (try wire.decodeFrame(Event, try wire.encodeMessage(Event, ev, &buf))).settings;
-    try std.testing.expectEqual(policy.Action.stop, back.rules[@intFromEnum(policy.Condition.fullscreen)]);
-    try std.testing.expect(back.exposed[@intFromEnum(policy.Condition.on_battery)]);
-    try std.testing.expect(!back.exposed[@intFromEnum(policy.Condition.fullscreen)]);
+    try std.testing.expectEqual(policy.Action.stop, back.rules[@backingInt(policy.Condition.fullscreen)]);
+    try std.testing.expect(back.exposed[@backingInt(policy.Condition.on_battery)]);
+    try std.testing.expect(!back.exposed[@backingInt(policy.Condition.fullscreen)]);
     try std.testing.expectEqualStrings(ev.settings.app_rules, back.app_rules);
     try std.testing.expectEqual(@as(u32, 1200), back.resume_after_ms);
     try std.testing.expectEqual(@as(u16, 15), back.rotate_minutes);

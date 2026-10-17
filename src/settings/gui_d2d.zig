@@ -116,7 +116,8 @@ fn d2d(r: Rect) sys.RectF {
 }
 
 fn colorF(c: Color) sys.ColorF {
-    return @bitCast(c);
+    // Zig 0.17 no longer @bitCasts extern structs; same four f32s through a pointer.
+    return @as(*const sys.ColorF, @ptrCast(&c)).*;
 }
 
 pub const Backend = struct {
@@ -283,12 +284,12 @@ pub const Backend = struct {
     }
 
     pub fn text(b: *Backend, r: Rect, s: []const u8, font: Font, a: Align, c: Color) void {
-        const fmt = b.formats.get(font)[@intFromEnum(a)] orelse return;
+        const fmt = b.formats.get(font)[@backingInt(a)] orelse return;
         Target.drawText(b.target.?, b.toWide(s), fmt, d2d(r), b.paint(c));
     }
 
     pub fn glyph(b: *Backend, r: Rect, g: Icon, font: Font, c: Color) void {
-        const fmt = b.formats.get(font)[@intFromEnum(Align.center)] orelse return;
+        const fmt = b.formats.get(font)[@backingInt(Align.center)] orelse return;
         Target.drawText(b.target.?, &.{codepoint(g)}, fmt, d2d(r), b.paint(c));
     }
 

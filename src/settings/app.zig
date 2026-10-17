@@ -824,7 +824,7 @@ fn drawPage() void {
             scroll.* = std.math.clamp(scroll.*, 0, @max(0, app.content_h - view.h + 24));
         }
     }
-    const s = ui.anim(key("scroll", @intFromEnum(app.page)), scroll.*);
+    const s = ui.anim(key("scroll", @backingInt(app.page)), scroll.*);
 
     if (app.page == .wallpapers and app.client != null) drawWallpaperButtons(x, cw, top);
 
@@ -1154,7 +1154,7 @@ fn pagePlayback(l: *Layout) void {
     };
     var c = cardRow(l, 68, .fit, "Fit", fill_desc, 320);
     const seg: Rect = .{ .x = c.right() - 320, .y = c.y + 18, .w = 320, .h = 32 };
-    if (ui.segmented(key("fill", 0), seg, &.{ "Crop", "Fit", "Stretch", "Center" }, @intFromEnum(info.fill))) |i| app.pending = .{ .set_fill = fills[i] };
+    if (ui.segmented(key("fill", 0), seg, &.{ "Crop", "Fit", "Stretch", "Center" }, @backingInt(info.fill))) |i| app.pending = .{ .set_fill = fills[i] };
 
     c = cardRow(l, 68, .volume, "Volume", "For wallpapers with sound, when they aren't muted", 272);
     const vol = app.volume_drag orelse @as(f32, @floatFromInt(info.volume)) / 100;
@@ -1204,7 +1204,7 @@ fn pagePlayback(l: *Layout) void {
     };
     c = cardRow(l, 68, .pictures, "Order", order_desc, 320);
     const oseg: Rect = .{ .x = c.right() - 320, .y = c.y + 18, .w = 320, .h = 32 };
-    if (ui.segmented(key("order", 0), oseg, &.{ "By name", "Shuffle", "Random" }, @intFromEnum(k.order))) |i| {
+    if (ui.segmented(key("order", 0), oseg, &.{ "By name", "Shuffle", "Random" }, @backingInt(k.order))) |i| {
         if (orders[i] != k.order) app.pending = .{ .set_order = orders[i] };
     }
 }
@@ -1351,11 +1351,11 @@ fn pagePausing(l: *Layout) void {
     const actions = [_]policy.Action{ .none, .mute, .pause, .stop };
     for (rule_groups) |group| {
         var shown: usize = 0;
-        for (group[1]) |r| shown += @intFromBool(info.exposed[@intFromEnum(r[0])]);
+        for (group[1]) |r| shown += @intFromBool(info.exposed[@backingInt(r[0])]);
         if (shown == 0) continue;
         groupHeader(l, group[0]);
         for (group[1]) |r| {
-            const ci = @intFromEnum(r[0]);
+            const ci = @backingInt(r[0]);
             if (!info.exposed[ci]) continue;
             const is_apps = r[0] == .app_rule;
             const apps_h: f32 = if (is_apps) appListHeight() else 0;
@@ -1531,7 +1531,7 @@ test "the player card says which rule holds the wallpaper" {
     try std.testing.expectEqualStrings("Paused: a game is running", heldBy("game_mode").?);
     try std.testing.expectEqualStrings("Paused for now", heldBy("something_new").?);
     // Every condition a rule can pause for has its own words.
-    inline for (@typeInfo(policy.Condition).@"enum".fields) |f| {
-        if (comptime !std.mem.eql(u8, f.name, "other_audio")) try std.testing.expect(!std.mem.eql(u8, heldBy(f.name).?, "Paused for now"));
+    inline for (@typeInfo(policy.Condition).@"enum".field_names) |f_name| {
+        if (comptime !std.mem.eql(u8, f_name, "other_audio")) try std.testing.expect(!std.mem.eql(u8, heldBy(f_name).?, "Paused for now"));
     }
 }

@@ -287,7 +287,7 @@ pub fn encodeHello(buf: []u8, h: Hello) Error![]const u8 {
     try w.string(h.client_name);
     try w.string(h.client_version);
     try w.u32_(h.protocol_version);
-    return w.finish(@intFromEnum(Request.hello));
+    return w.finish(@backingInt(Request.hello));
 }
 
 /// Consumer DMA-BUF capabilities, flattened: for fourcc `fourccs[i]`,
@@ -402,7 +402,7 @@ pub fn encodeRegister(buf: []u8, name: []const u8, instance_id: []const u8, m: M
     try w.u32_(16384);
     try w.u32_(0); // presentation_caps: none
     try w.u32_(window_flags);
-    return w.finish(@intFromEnum(Request.register_display));
+    return w.finish(@backingInt(Request.register_display));
 }
 
 pub fn decodeMetrics(body: []const u8) Error!Metrics {
@@ -417,14 +417,14 @@ pub fn encodeMetrics(buf: []u8, m: Metrics) Error![]const u8 {
     try w.u32_(m.width);
     try w.u32_(m.height);
     try w.u32_(m.refresh_mhz);
-    return w.finish(@intFromEnum(Request.set_display_metrics));
+    return w.finish(@backingInt(Request.set_display_metrics));
 }
 
 pub const ImportFailed = struct { buffer_generation: u64, kind: ImportFailure, message: []const u8 };
 
 pub fn decodeImportFailed(body: []const u8) Error!ImportFailed {
     var r: Reader = .{ .body = body };
-    const f: ImportFailed = .{ .buffer_generation = try r.u64_(), .kind = @enumFromInt(try r.u32_()), .message = try r.string() };
+    const f: ImportFailed = .{ .buffer_generation = try r.u64_(), .kind = @fromBackingInt(@intCast(try r.u32_())), .message = try r.string() };
     try r.done();
     return f;
 }
@@ -432,9 +432,9 @@ pub fn decodeImportFailed(body: []const u8) Error!ImportFailed {
 pub fn encodeImportFailed(buf: []u8, f: ImportFailed) Error![]const u8 {
     var w: Writer = .init(buf);
     try w.u64_(f.buffer_generation);
-    try w.u32_(@intFromEnum(f.kind));
+    try w.u32_(@backingInt(f.kind));
     try w.string(f.message);
-    return w.finish(@intFromEnum(Request.buffer_import_failed));
+    return w.finish(@backingInt(Request.buffer_import_failed));
 }
 
 /// `set_window_state`, `ack_unbind`: one scalar.
@@ -477,7 +477,7 @@ pub fn encodeReleaseArmed(buf: []u8, a: ReleaseArmed) Error![]const u8 {
     var w: Writer = .init(buf);
     try w.u64_(a.buffer_generation);
     try w.u64_(a.seq);
-    return w.finish(@intFromEnum(Request.frame_release_armed));
+    return w.finish(@backingInt(Request.frame_release_armed));
 }
 
 /// Tagged `client_capabilities`: only whether window observation was declared.
@@ -538,7 +538,7 @@ pub fn encodeWindowObservationState(buf: []u8, s: WindowObservationState) Error!
     try w.u32_(s.flags);
     w.patchLength(f);
     w.patchLength(body);
-    return w.finish(@intFromEnum(Request.set_window_observation_state));
+    return w.finish(@backingInt(Request.set_window_observation_state));
 }
 
 // ---- events (zmural -> client) -------------------------------------------------------
@@ -546,7 +546,7 @@ pub fn encodeWindowObservationState(buf: []u8, s: WindowObservationState) Error!
 pub fn encodeWelcome(buf: []u8, server_version: []const u8) Error![]const u8 {
     var w: Writer = .init(buf);
     try w.string(server_version);
-    return w.finish(@intFromEnum(Event.welcome));
+    return w.finish(@backingInt(Event.welcome));
 }
 
 pub fn decodeWelcome(body: []const u8) Error![]const u8 {
@@ -576,7 +576,7 @@ pub fn encodeDisplayAccepted(buf: []u8, display_id: u64, p: Presentation) Error!
     var w: Writer = .init(buf);
     try w.u64_(display_id);
     try writeSnapshot(&w, p);
-    return w.finish(@intFromEnum(Event.display_accepted));
+    return w.finish(@backingInt(Event.display_accepted));
 }
 
 pub fn decodeDisplayId(body: []const u8) Error!u64 {
@@ -638,7 +638,7 @@ pub fn encodeBindBuffers(buf: []u8, b: BindBuffers) Error![]const u8 {
     try writeComposition(&w, b.initial_config);
     try w.u64_(b.content_token);
     try w.u64_(b.presentation_config_generation);
-    return w.finish(@intFromEnum(Event.bind_buffers));
+    return w.finish(@backingInt(Event.bind_buffers));
 }
 
 /// As the host reads it: single-plane pools only (the first plane's layout).
@@ -668,7 +668,7 @@ pub fn decodeBindBuffers(body: []const u8) Error!struct { BindBuffers, u32 } {
 pub fn encodeComposition(buf: []u8, c: CompositionConfig) Error![]const u8 {
     var w: Writer = .init(buf);
     try writeComposition(&w, c);
-    return w.finish(@intFromEnum(Event.set_composition_config));
+    return w.finish(@backingInt(Event.set_composition_config));
 }
 
 pub fn decodeComposition(body: []const u8) Error!CompositionConfig {
@@ -686,7 +686,7 @@ pub fn encodeFrameReady(buf: []u8, f: FrameReady) Error![]const u8 {
     try w.u64_(f.buffer_generation);
     try w.u32_(f.buffer_index);
     try w.u64_(f.seq);
-    return w.finish(@intFromEnum(Event.frame_ready));
+    return w.finish(@backingInt(Event.frame_ready));
 }
 
 pub fn decodeFrameReady(body: []const u8) Error!FrameReady {
@@ -698,9 +698,9 @@ pub fn decodeFrameReady(body: []const u8) Error!FrameReady {
 
 pub fn encodeError(buf: []u8, code: ErrorCode, message: []const u8) Error![]const u8 {
     var w: Writer = .init(buf);
-    try w.u32_(@intFromEnum(code));
+    try w.u32_(@backingInt(code));
     try w.string(message);
-    return w.finish(@intFromEnum(Event.@"error"));
+    return w.finish(@backingInt(Event.@"error"));
 }
 
 pub fn encodePresentationState(buf: []u8, p: Presentation) Error![]const u8 {
@@ -708,7 +708,7 @@ pub fn encodePresentationState(buf: []u8, p: Presentation) Error![]const u8 {
     try w.u64_(p.state_generation);
     try w.u64_(p.config_generation);
     try w.boolean(p.paused);
-    return w.finish(@intFromEnum(Event.set_presentation_state));
+    return w.finish(@backingInt(Event.set_presentation_state));
 }
 
 /// Tagged wire types used below (waywallen's generator: u64 = 4, nested
@@ -745,7 +745,7 @@ pub fn encodeWindowObservationConfig(buf: []u8, generation: u64) Error![]const u
     }
     w.patchLength(field);
     w.patchLength(body);
-    return w.finish(@intFromEnum(Event.set_window_observation_config));
+    return w.finish(@backingInt(Event.set_window_observation_config));
 }
 
 // ---- stream framing -------------------------------------------------------------------
@@ -887,7 +887,7 @@ pub fn requestFds(_: u16, _: []const u8) usize {
 
 /// fds per event, as the protocol lists them.
 pub fn eventFds(opcode: u16, body: []const u8) usize {
-    return switch (@as(Event, @enumFromInt(opcode))) {
+    return switch (@as(Event, @fromBackingInt(@intCast(opcode)))) {
         .frame_ready => 2,
         .bind_buffers => blk: {
             // count (at 8) * planes_per_buffer (at 32)
@@ -952,7 +952,7 @@ test "bind_buffers round trips and names its fd count" {
         .presentation_config_generation = 1,
     };
     const f = try encodeBindBuffers(&buf, b);
-    try testing.expectEqual(@as(usize, 3), eventFds(@intFromEnum(Event.bind_buffers), f[header_len..]));
+    try testing.expectEqual(@as(usize, 3), eventFds(@backingInt(Event.bind_buffers), f[header_len..]));
     const back, const planes = try decodeBindBuffers(f[header_len..]);
     try testing.expectEqual(@as(u32, 1), planes);
     try testing.expectEqual(b.modifier, back.modifier);
@@ -1001,7 +1001,7 @@ test "stream frames split across reads, with their fds" {
     try a.send(fr, &extra);
     try b.fill();
     const got = (try b.next(eventFds)).?;
-    try testing.expectEqual(@intFromEnum(Event.frame_ready), got.opcode);
+    try testing.expectEqual(@backingInt(Event.frame_ready), got.opcode);
     try testing.expectEqual(@as(u32, 2), (try decodeFrameReady(got.body)).buffer_index);
     try testing.expectEqual(@as(usize, 2), b.frame_nfds);
     try testing.expectEqual(@as(?Stream.Frame, null), try b.next(eventFds));

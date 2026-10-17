@@ -29,7 +29,7 @@ pub const max_outputs = 16;
 pub const Facts = struct {
     names: [max_outputs][64]u8 = undefined,
     name_lens: [max_outputs]usize = @splat(0),
-    conditions: [max_outputs]policy.Conditions = @splat(.initEmpty()),
+    conditions: [max_outputs]policy.Conditions = @splat(.empty),
     len: usize = 0,
     /// The focused window's process, 0 when nothing has focus.
     front_pid: linux.pid_t = 0,
@@ -93,7 +93,7 @@ pub fn factsFromTree(gpa: std.mem.Allocator, json: []const u8) !Facts {
 
         var shown: [64]Rect = undefined;
         var n_shown: usize = 0;
-        var c: policy.Conditions = .initEmpty();
+        var c: policy.Conditions = .empty;
         var stack: [64]*const Node = undefined;
         var depth: usize = 0;
         for (output.nodes) |*ws| {

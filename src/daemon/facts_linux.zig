@@ -45,7 +45,7 @@ pub const Sample = struct {
 };
 
 pub fn conditionsFrom(s: Sample) policy.Conditions {
-    var c: policy.Conditions = .initEmpty();
+    var c: policy.Conditions = .empty;
     if (s.on_battery orelse false) c.insert(.on_battery);
     if (s.power_saver orelse false) c.insert(.power_saver);
     if ((s.locked_hint orelse false) or (s.screensaver_active orelse false)) c.insert(.session_locked);
@@ -169,21 +169,21 @@ fn stringProp(b: *dbus.Conn, dest: []const u8, path: []const u8, iface: []const 
 fn pack(c: policy.Conditions) u32 {
     var bits: u32 = 0;
     for (std.enums.values(policy.Condition)) |k| {
-        if (c.contains(k)) bits |= @as(u32, 1) << @intFromEnum(k);
+        if (c.contains(k)) bits |= @as(u32, 1) << @backingInt(k);
     }
     return bits;
 }
 
 fn unpack(bits: u32) policy.Conditions {
-    var c: policy.Conditions = .initEmpty();
+    var c: policy.Conditions = .empty;
     for (std.enums.values(policy.Condition)) |k| {
-        if (bits & (@as(u32, 1) << @intFromEnum(k)) != 0) c.insert(k);
+        if (bits & (@as(u32, 1) << @backingInt(k)) != 0) c.insert(k);
     }
     return c;
 }
 
 test conditionsFrom {
-    try std.testing.expect(conditionsFrom(.{}).eql(.initEmpty()));
+    try std.testing.expect(conditionsFrom(.{}).eql(.empty));
     const all = conditionsFrom(.{
         .on_battery = true,
         .power_saver = true,
@@ -212,11 +212,11 @@ test conditionsFrom {
 }
 
 test "facts pack into the atomic and back" {
-    var c: policy.Conditions = .initEmpty();
+    var c: policy.Conditions = .empty;
     try std.testing.expectEqual(@as(u32, 0), pack(c));
     c.insert(.game_mode);
     c.insert(.on_battery);
     try std.testing.expect(unpack(pack(c)).eql(c));
-    const full: policy.Conditions = .initFull();
+    const full: policy.Conditions = .full;
     try std.testing.expect(unpack(pack(full)).eql(full));
 }

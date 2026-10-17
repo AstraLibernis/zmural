@@ -122,8 +122,9 @@ pub const Fence = struct {
 /// Loads `T`'s function pointers from `lib`, each as `prefix ++ field name`.
 fn loadTable(comptime T: type, lib: *std.DynLib, comptime prefix: []const u8) Error!T {
     var t: T = undefined;
-    inline for (@typeInfo(T).@"struct".fields) |f| {
-        @field(t, f.name) = lib.lookup(f.type, prefix ++ f.name) orelse return error.SymbolMissing;
+    const info = @typeInfo(T).@"struct";
+    inline for (info.field_names, info.field_types) |f_name, F_type| {
+        @field(t, f_name) = lib.lookup(F_type, prefix ++ f_name) orelse return error.SymbolMissing;
     }
     return t;
 }
@@ -177,17 +178,17 @@ pub const Device = struct {
         if (egl.MakeCurrent(display, null, null, context) == 0) return error.EglFailed;
 
         var gl: Gl = undefined;
-        inline for (@typeInfo(Gl).@"struct".fields) |f| {
-            const sym = egl.GetProcAddress("gl" ++ f.name) orelse return error.SymbolMissing;
-            @field(gl, f.name) = @ptrCast(@alignCast(sym)); // zsnag:ok — signature declared from gl2.h / gl2ext.h; function addresses are aligned
+        inline for (@typeInfo(Gl).@"struct".field_names) |f_name| {
+            const sym = egl.GetProcAddress("gl" ++ f_name) orelse return error.SymbolMissing;
+            @field(gl, f_name) = @ptrCast(@alignCast(sym)); // zsnag:ok — signature declared from gl2.h / gl2ext.h; function addresses are aligned
         }
         var fence: ?Fence = null;
         if (hasExtension(exts, "EGL_ANDROID_native_fence_sync") and hasExtension(exts, "EGL_KHR_fence_sync")) {
             var f: Fence = undefined;
             var complete = true;
-            inline for (@typeInfo(Fence).@"struct".fields) |field| {
-                if (egl.GetProcAddress("egl" ++ field.name)) |sym| {
-                    @field(f, field.name) = @ptrCast(@alignCast(sym)); // zsnag:ok — signature from eglext.h; function addresses are aligned
+            inline for (@typeInfo(Fence).@"struct".field_names) |field_name| {
+                if (egl.GetProcAddress("egl" ++ field_name)) |sym| {
+                    @field(f, field_name) = @ptrCast(@alignCast(sym)); // zsnag:ok — signature from eglext.h; function addresses are aligned
                 } else complete = false;
             }
             if (complete) fence = f;

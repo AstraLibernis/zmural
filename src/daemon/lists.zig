@@ -133,7 +133,7 @@ test "parse limits count and length" {
     for (0..max_items + 1) |i| try many.print(testing.allocator, "app{d}.exe\x00", .{i});
     try testing.expectError(error.TooMany, Owned.parse(testing.allocator, many.items, isAppNameWindows));
 
-    const long = [_]u8{'a'} ** (max_item_len + 1);
+    const long: [max_item_len + 1]u8 = @splat('a');
     try testing.expectError(error.TooLong, Owned.parse(testing.allocator, &long, isAppNameWindows));
 }
 

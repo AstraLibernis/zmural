@@ -95,10 +95,20 @@ test absolutePath {
     try std.testing.expect(std.fs.path.isAbsolute(abs));
     try std.testing.expect(std.mem.endsWith(u8, abs, "some\\file.mp4"));
     // Longer than the old fixed 1024-unit buffer.
-    const long = try std.fmt.allocPrint(a, "C:\\{s}\\x.mp4", .{"d" ** 1500});
+    const long = try std.fmt.allocPrint(a, "C:\\{s}\\x.mp4", .{repeat("d", 1500)});
     try std.testing.expectEqualStrings(long, try absolutePath(a, long));
     // An unpaired surrogate (valid WTF-8, invalid UTF-8) survives the round trip.
     const odd = "C:\\w\\a\xED\xA0\x80b.mp4";
     try std.testing.expectEqualStrings(odd, try absolutePath(a, odd));
     try std.testing.expectEqualStrings("test-pattern", try absolutePath(a, "test-pattern"));
+}
+
+/// Comptime string repeat (the ** array operator was removed in Zig 0.17).
+fn repeat(comptime s: []const u8, comptime n: usize) *const [s.len * n]u8 {
+    const arr: [s.len * n]u8 = comptime blk: {
+        var out: [s.len * n]u8 = undefined;
+        for (0..n) |i| @memcpy(out[i * s.len ..][0..s.len], s);
+        break :blk out;
+    };
+    return &arr;
 }

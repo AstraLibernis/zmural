@@ -1044,7 +1044,7 @@ pub fn startImport(zip_path: []const u8, report: []const u8) !void {
 
 pub fn importFinished() bool {
     const pid = st.import_pid orelse return true;
-    var status: u32 = 0;
+    var status: i32 = 0;
     const rc = linux.wait4(pid, &status, linux.W.NOHANG, null);
     if (linux.errno(rc) == .SUCCESS and rc == 0) return false; // still running
     st.import_pid = null;
@@ -1114,12 +1114,12 @@ fn open(path: []const u8, failed: []const u8) void {
 fn checkOpeners() void {
     for (&st.openers) |*o| {
         const pid = o.pid orelse continue;
-        var status: u32 = 0;
+        var status: i32 = 0;
         const rc = linux.wait4(pid, &status, linux.W.NOHANG, null);
         if (linux.errno(rc) == .SUCCESS and rc == 0) continue; // still running
         o.pid = null;
         if (linux.errno(rc) != .SUCCESS) continue;
-        const ok = linux.W.IFEXITED(status) and linux.W.EXITSTATUS(status) == 0;
+        const ok = linux.W.IFEXITED(@bitCast(status)) and linux.W.EXITSTATUS(@bitCast(status)) == 0;
         if (!ok and now() -| o.started_ms <= opener_news_ms) toastPath(o.failed, o.path[0..o.path_len]);
     }
 }
@@ -1409,13 +1409,13 @@ fn makersBusy() bool {
 fn pumpMakers() void {
     for (&st.makers) |*slot| {
         const m = slot.* orelse continue;
-        var status: u32 = 0;
+        var status: i32 = 0;
         const rc = linux.wait4(m.pid, &status, linux.W.NOHANG, null);
         if (linux.errno(rc) == .SUCCESS and rc == 0) continue; // still running
         slot.* = null;
         defer st.gpa.free(m.path);
         defer st.gpa.free(m.out);
-        const ok = linux.errno(rc) == .SUCCESS and linux.W.IFEXITED(status) and linux.W.EXITSTATUS(status) == 0;
+        const ok = linux.errno(rc) == .SUCCESS and linux.W.IFEXITED(@bitCast(status)) and linux.W.EXITSTATUS(@bitCast(status)) == 0;
         if (ok) if (app.ui.b.loadThumb(m.out, app_mod.thumb_px)) |t| {
             app_mod.thumbImage(m.path, t.img, t.width, t.height);
             continue;
@@ -1450,7 +1450,7 @@ fn startMaker(path: []u8) !Maker {
     try std.Io.Dir.cwd().createDirPath(st.io, std.fs.path.dirname(out_path).?);
     const exe = try std.fs.path.join(st.gpa, &.{ st.exe_dir, "zmural" });
     defer st.gpa.free(exe);
-    const out = try st.gpa.dupeZ(u8, out_path);
+    const out = try st.gpa.dupeSentinel(u8, out_path, 0);
     errdefer st.gpa.free(out);
     const child = try std.process.spawn(st.io, .{
         .argv = &.{ exe, "--still-frame", src, out, std.fmt.comptimePrint("{d}", .{app_mod.thumb_px}) },
@@ -1466,7 +1466,7 @@ fn stopMakers() void {
     for (&st.makers) |*slot| {
         const m = slot.* orelse continue;
         _ = linux.kill(m.pid, linux.SIG.TERM);
-        var status: u32 = 0;
+        var status: i32 = 0;
         _ = linux.wait4(m.pid, &status, 0, null);
         st.gpa.free(m.path);
         st.gpa.free(m.out);

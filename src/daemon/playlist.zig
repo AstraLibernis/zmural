@@ -101,7 +101,7 @@ test "shuffle plays each item once per cycle" {
     defer p.deinit(gpa);
     var last: ?usize = null;
     for (0..4) |_| {
-        var seen = [_]bool{false} ** 8;
+        var seen: [8]bool = @splat(false);
         for (0..8) |k| {
             const i = p.next().?;
             try std.testing.expect(!seen[i]);

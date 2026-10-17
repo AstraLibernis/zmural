@@ -111,7 +111,7 @@ pub fn build(b: *std.Build) void {
     if (os == .windows) {
         // Likewise WebView2Loader.dll (third_party/webview2) for web wallpapers.
         for ([_][]const u8{ "third_party/mpv/libmpv-2.dll", "third_party/webview2/WebView2Loader.dll" }) |dll| {
-            if (std.Io.Dir.cwd().access(b.graph.io, b.pathFromRoot(dll), .{})) |_| {
+            if (b.root.access(b.graph.io, dll, .{})) |_| {
                 b.installBinFile(dll, std.fs.path.basename(dll));
             } else |_| {}
         }
@@ -134,8 +134,9 @@ pub fn build(b: *std.Build) void {
         // Windows' own bsdtar writes zips; a GNU tar earlier on PATH (Git Bash) can't.
         const system_root = b.graph.environ_map.get("SystemRoot") orelse "C:\\Windows";
         const zip = b.addSystemCommand(&.{ b.pathJoin(&.{ system_root, "System32", "tar.exe" }), "-a", "-c", "-f" });
-        zip.addArg(b.getInstallPath(.prefix, b.fmt("package/{s}.zip", .{name})));
-        zip.addArgs(&.{ "-C", b.getInstallPath(.prefix, "package") });
+        zip.addDirectoryArg2(installPrefix("package"), .{ .suffix = b.fmt("/{s}.zip", .{name}) });
+        zip.addArg("-C");
+        zip.addDirectoryArg2(installPrefix("package"), .{});
         // Each file by name, not the folder: the folder keeps whatever older
         // builds left in it (once, the exes zmural used to have).
         zip.addArgs(&.{ b.fmt("{s}/zmural.exe", .{name}), b.fmt("{s}/zmural-console.exe", .{name}) });
@@ -180,12 +181,12 @@ pub fn build(b: *std.Build) void {
     const icongen = b.addExecutable(.{ .name = "icongen", .root_module = b.createModule(.{
         .root_source_file = b.path("tools/icongen.zig"),
         .target = b.graph.host,
-        .optimize = .ReleaseFast,
+        .optimize = .fast,
     }) });
     const gen = b.addRunArtifact(icongen);
-    gen.addArg(b.pathFromRoot("assets/zmural.ico"));
-    gen.addArg(b.pathFromRoot("zig-out/icon-preview.png"));
-    gen.addArg(b.pathFromRoot("assets/icons"));
+    gen.addArg(fromRoot(b, "assets/zmural.ico"));
+    gen.addArg(fromRoot(b, "zig-out/icon-preview.png"));
+    gen.addArg(fromRoot(b, "assets/icons"));
     b.step("icon", "Regenerate assets/zmural.ico (and zig-out/icon-preview.png)").dependOn(&gen.step);
     addTests(b, test_step, icongen.root_module);
 
@@ -194,11 +195,11 @@ pub fn build(b: *std.Build) void {
     const crashcode = b.addExecutable(.{ .name = "crashcode", .root_module = b.createModule(.{
         .root_source_file = b.path("tools/crashcode.zig"),
         .target = b.graph.host,
-        .optimize = .Debug,
+        .optimize = .debug,
     }) });
     const decode = b.addRunArtifact(crashcode);
-    decode.addArg(b.pathFromRoot("zig-out/package/debug"));
-    if (b.args) |args| decode.addArgs(args);
+    decode.addArg(fromRoot(b, "zig-out/package/debug"));
+    decode.addPassthruArgs();
     b.step("crashcode", "Turn a crash code into functions and lines (-- \"zmural 0.1.0 linux crash: ...\")").dependOn(&decode.step);
     addTests(b, test_step, crashcode.root_module);
 
@@ -208,10 +209,10 @@ pub fn build(b: *std.Build) void {
     const wallgen = b.addExecutable(.{ .name = "wallgen", .root_module = b.createModule(.{
         .root_source_file = b.path("tools/wallgen.zig"),
         .target = b.graph.host,
-        .optimize = .ReleaseFast,
+        .optimize = .fast,
     }) });
     const encode = b.addSystemCommand(&.{
-        "bash", "-c",
+        "bash",    "-c",
         \\set -o pipefail
         \\"$1" frames | ffmpeg -hide_banner -loglevel error -y -f rawvideo -pix_fmt rgb24 -s 1920x1080 -r 30 -i - \
         \\  -c:v libvpx-vp9 -crf 20 -b:v 0 -row-mt 1 -deadline good -cpu-used 2 -pix_fmt yuv420p -an "$2"
@@ -219,7 +220,7 @@ pub fn build(b: *std.Build) void {
         "wallgen",
     });
     encode.addArtifactArg(wallgen);
-    encode.addArg(b.pathFromRoot(starter_wallpaper));
+    encode.addArg(fromRoot(b, starter_wallpaper));
     encode.has_side_effects = true;
     b.step("starter-wallpaper", "Regenerate " ++ starter_wallpaper ++ " (needs ffmpeg with libvpx-vp9)").dependOn(&encode.step);
     addTests(b, test_step, wallgen.root_module);
@@ -257,11 +258,11 @@ pub fn build(b: *std.Build) void {
             ,
             "kde-plugin",
         });
-        run.addArg(b.pathFromRoot("third_party/waywallen-display"));
-        run.addArg(b.getInstallPath(.prefix, "share/zmural/zmural-kde.zip"));
+        run.addArg(fromRoot(b, "third_party/waywallen-display"));
+        run.addDirectoryArg2(installPrefix("share/zmural/zmural-kde.zip"), .{});
         // Its own build folder per root: CMake's cache names the compilers it found.
-        run.addArg(b.pathFromRoot(if (plugin_root != null) ".zig-cache/kde-plugin-root" else ".zig-cache/kde-plugin"));
-        run.addArg(b.pathFromRoot("."));
+        run.addArg(fromRoot(b, if (plugin_root != null) ".zig-cache/kde-plugin-root" else ".zig-cache/kde-plugin"));
+        run.addArg(fromRoot(b, "."));
         run.addArg(plugin_root orelse "");
         run.has_side_effects = true;
         b.step("kde-plugin", "Build zmural's KDE Plasma plugin (zig-out/share/zmural/zmural-kde.zip)").dependOn(&run.step);
@@ -283,11 +284,11 @@ pub fn build(b: *std.Build) void {
             ,
             "gnome-extension",
         });
-        run.addArg(b.pathFromRoot("third_party/waywallen-display"));
-        run.addArg(b.getInstallPath(.prefix, "share/zmural/zmural-gnome.zip"));
+        run.addArg(fromRoot(b, "third_party/waywallen-display"));
+        run.addDirectoryArg2(installPrefix("share/zmural/zmural-gnome.zip"), .{});
         // Its own build folder per root: CMake's cache names the compilers it found.
-        run.addArg(b.pathFromRoot(if (plugin_root != null) ".zig-cache/gnome-extension-root" else ".zig-cache/gnome-extension"));
-        run.addArg(b.pathFromRoot("."));
+        run.addArg(fromRoot(b, if (plugin_root != null) ".zig-cache/gnome-extension-root" else ".zig-cache/gnome-extension"));
+        run.addArg(fromRoot(b, "."));
         run.addArg(plugin_root orelse "");
         run.has_side_effects = true;
         b.step("gnome-extension", "Build zmural's GNOME Shell extension (zig-out/share/zmural/zmural-gnome.zip)").dependOn(&run.step);
@@ -311,9 +312,11 @@ pub fn build(b: *std.Build) void {
             package.dependOn(&b.addFail("build the KDE plugin and GNOME extension on the oldest system they declare, so they load there and on everything newer: -Dplugin-root=$(tools/plugin-root.sh)").step);
         } else {
             const tar = b.addSystemCommand(&.{ "tar", "--owner=0", "--group=0", "-czf" });
-            tar.addArg(b.getInstallPath(.prefix, b.fmt("package/{s}.tar.gz", .{name})));
+            tar.addDirectoryArg2(installPrefix("package"), .{ .suffix = b.fmt("/{s}.tar.gz", .{name}) });
             // Each file by name, not the folder, which keeps what older builds left.
-            tar.addArgs(&.{ "-C", b.getInstallPath(.prefix, "package"), b.fmt("{s}/bin/zmural", .{name}), b.fmt("{s}/bin/zmural-console", .{name}) });
+            tar.addArg("-C");
+            tar.addDirectoryArg2(installPrefix("package"), .{});
+            tar.addArgs(&.{ b.fmt("{s}/bin/zmural", .{name}), b.fmt("{s}/bin/zmural-console", .{name}) });
             const bin_dir: std.Build.InstallDir = .{ .custom = b.fmt("package/{s}/bin", .{name}) };
             // What ships has no debugging info; it goes to package/debug/<name>
             // instead, matched to its program by build ID, to read crash
@@ -329,8 +332,8 @@ pub fn build(b: *std.Build) void {
                 ,
                 "strip",
             });
-            strip.addArg(b.getInstallPath(.prefix, b.fmt("package/{s}/bin", .{name})));
-            strip.addArg(b.getInstallPath(.prefix, b.fmt("package/debug/{s}", .{name})));
+            strip.addDirectoryArg2(installPrefix(b.fmt("package/{s}/bin", .{name})), .{});
+            strip.addDirectoryArg2(installPrefix("package"), .{ .suffix = b.fmt("/debug/{s}", .{name}) });
             strip.has_side_effects = true;
             for ([_]*std.Build.Step.Compile{ daemon, cli }) |exe| {
                 const install = b.addInstallArtifact(exe, .{ .dest_dir = .{ .override = bin_dir } });
@@ -353,7 +356,7 @@ pub fn build(b: *std.Build) void {
             }
             // The plugin and extension, built first into zig-out/share/zmural.
             for ([_]struct { *std.Build.Step, []const u8 }{ .{ kde_plugin.?, "zmural-kde.zip" }, .{ gnome_extension.?, "zmural-gnome.zip" } }) |z| {
-                const install = b.addInstallFileWithDir(.{ .cwd_relative = b.getInstallPath(.prefix, b.fmt("share/zmural/{s}", .{z[1]})) }, .{ .custom = b.fmt("package/{s}/share/zmural", .{name}) }, z[1]);
+                const install = b.addInstallFileWithDir(installPrefix(b.fmt("share/zmural/{s}", .{z[1]})), .{ .custom = b.fmt("package/{s}/share/zmural", .{name}) }, z[1]);
                 install.step.dependOn(z[0]);
                 tar.step.dependOn(&install.step);
                 tar.addArg(b.fmt("{s}/share/zmural/{s}", .{ name, z[1] }));
@@ -388,7 +391,7 @@ fn addExe(
     name: []const u8,
     root: []const u8,
     target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
+    optimize: std.builtin.Optimize,
     imports: []const std.Build.Module.Import,
 ) *std.Build.Step.Compile {
     const mod = b.createModule(.{
@@ -399,7 +402,7 @@ fn addExe(
     });
     // Every Windows executable carries the icon (resource ID 1), once it exists.
     if (target.result.os.tag == .windows) {
-        if (std.Io.Dir.cwd().access(b.graph.io, b.pathFromRoot("assets/zmural.ico"), .{})) |_| {
+        if (b.root.access(b.graph.io, "assets/zmural.ico", .{})) |_| {
             mod.addWin32ResourceFile(.{ .file = b.path("assets/zmural.rc") });
         } else |_| {}
     }
@@ -424,6 +427,18 @@ fn addTests(b: *std.Build, test_step: *std.Build.Step, mod: *std.Build.Module) v
 
 fn addRunStep(b: *std.Build, exe: *std.Build.Step.Compile, step_name: []const u8, desc: []const u8) void {
     const run = b.addRunArtifact(exe);
-    if (b.args) |args| run.addArgs(args);
+    run.addPassthruArgs();
     b.step(step_name, desc).dependOn(&run.step);
+}
+
+/// An absolute path under the build root, for tools that take plain path strings
+/// (what b.pathFromRoot gave before Zig 0.17).
+fn fromRoot(b: *std.Build, sub: []const u8) []const u8 {
+    return b.root.joinString(b.allocator, sub) catch @panic("OOM");
+}
+
+/// A path under the install prefix, resolved at make time (the configure phase no
+/// longer knows the prefix in Zig 0.17).
+fn installPrefix(sub: []const u8) std.Build.LazyPath {
+    return .{ .relative = .{ .base = .install_prefix, .sub_path = sub } };
 }

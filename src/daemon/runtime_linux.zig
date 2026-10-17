@@ -160,9 +160,9 @@ const Runtime = struct {
     /// Battery, lock, GameMode...: read on a thread of its own.
     facts: facts.Watcher = .{ .session_address = null, .system_address = null, .xdg_runtime_dir = null },
     /// The facts as `evaluate` last saw them, to log changes.
-    system: policy.Conditions = .initEmpty(),
+    system: policy.Conditions = .empty,
     /// Every condition `evaluate` last saw, system-wide and per monitor, for `status`.
-    active: policy.Conditions = .initEmpty(),
+    active: policy.Conditions = .empty,
     /// The standard folders: Wallpapers in the user's Videos and Pictures folders.
     default_dirs: []const []const u8 = &.{},
     /// Lists set through the settings window, owned here once changed.
@@ -785,11 +785,11 @@ fn stillPicture(video: []const u8, buf: []u8) ?[]const u8 {
 /// The still frame's process ended: set it, or say it couldn't be made.
 fn checkStillFrame() void {
     const pid = rt.still.frame_pid orelse return;
-    var status: u32 = 0;
+    var status: i32 = 0;
     const rc = linux.wait4(pid, &status, linux.W.NOHANG, null);
     if (linux.errno(rc) == .SUCCESS and rc == 0) return; // still running
     rt.still.frame_pid = null;
-    const ok = linux.errno(rc) == .SUCCESS and linux.W.IFEXITED(status) and linux.W.EXITSTATUS(status) == 0;
+    const ok = linux.errno(rc) == .SUCCESS and linux.W.IFEXITED(@bitCast(status)) and linux.W.EXITSTATUS(@bitCast(status)) == 0;
     if (ok) {
         // Found in the cache from now on.
         if (rt.still.frame_for) |v| rt.gpa.free(v);
@@ -805,11 +805,11 @@ fn superviseHost(t: u64) void {
     const h = &rt.host;
     if (!h.wanted or h.unsupported) return;
     if (h.pid) |pid| {
-        var status: u32 = 0;
+        var status: i32 = 0;
         const rc = linux.wait4(pid, &status, linux.W.NOHANG, null);
         if (linux.errno(rc) == .SUCCESS and rc == 0) return; // still running
         h.pid = null;
-        const code: ?u8 = if (linux.errno(rc) == .SUCCESS and linux.W.IFEXITED(status)) linux.W.EXITSTATUS(status) else null;
+        const code: ?u8 = if (linux.errno(rc) == .SUCCESS and linux.W.IFEXITED(@bitCast(status))) linux.W.EXITSTATUS(@bitCast(status)) else null;
         if (code == backend.exit_unsupported) {
             h.unsupported = true;
             log.warn("this compositor lacks what zmural's display host needs (wlr-layer-shell v3, linux-dmabuf v4, wl_output v4; the host's line above names it): zmural can't show live wallpapers on it", .{});
@@ -1354,8 +1354,8 @@ fn settingsInfo() control.Event {
     var rules: control.RuleActions = undefined;
     var exposed: control.RuleExposed = undefined;
     for (std.enums.values(policy.Condition)) |c| {
-        rules[@intFromEnum(c)] = rt.settings.policy.rules.get(c).action;
-        exposed[@intFromEnum(c)] = offered(c);
+        rules[@backingInt(c)] = rt.settings.policy.rules.get(c).action;
+        exposed[@backingInt(c)] = offered(c);
     }
     const third = reply_buf.len / 3;
     return .{ .settings = .{
@@ -1430,7 +1430,7 @@ fn stepWallpaper(forward: bool) ?[]const u8 {
 fn playing() bool {
     if (rt.settings.paused) return false;
     for (rt.renderers.items) |r| {
-        if (r.ready and @intFromEnum(r.sup.applied) <= @intFromEnum(policy.Action.mute)) return true;
+        if (r.ready and @backingInt(r.sup.applied) <= @backingInt(policy.Action.mute)) return true;
     }
     return false;
 }
@@ -1614,7 +1614,7 @@ fn route(d: *Display) void {
         return;
     }
     const fill = rt.fills.fillFor(d.s.monitor, rt.settings.fill);
-    const a = rt.router.assign(rt.gpa, d.s.monitor, path, @intFromEnum(fill)) catch return;
+    const a = rt.router.assign(rt.gpa, d.s.monitor, path, @backingInt(fill)) catch return;
     d.renderer = a.renderer;
     if (a.stop) |old| stopRenderer(old);
     if (a.spawn) {
@@ -1627,7 +1627,7 @@ fn route(d: *Display) void {
             destroyRenderer(r);
             return;
         };
-        const want = desire.forRenderer(&rt.settings.policy, .initEmpty(), &.{d.s.monitor}, &.{conditionsOf(d)}, &rt.router, r.id, rt.settings.paused);
+        const want = desire.forRenderer(&rt.settings.policy, .empty, &.{d.s.monitor}, &.{conditionsOf(d)}, &rt.router, r.id, rt.settings.paused);
         if (r.sup.begin(want)) start(r);
         return;
     }
@@ -1838,7 +1838,7 @@ fn execute(r: *Renderer, cmd: lifecycle.Command) void {
 /// The renderer process exited: reap it, clear its monitors, and let the
 /// supervisor decide about a restart.
 fn reap(r: *Renderer) void {
-    var status: u32 = 0;
+    var status: i32 = 0;
     if (r.pid) |pid| _ = linux.wait4(pid, &status, 0, null);
     if (r.pidfd >= 0) _ = linux.close(r.pidfd);
     r.pidfd = -1;
@@ -1973,7 +1973,7 @@ fn shutdown() void {
     // Our display host goes with us: quitting zmural gives the desktop back.
     if (rt.host.pid) |pid| {
         _ = linux.kill(pid, linux.SIG.TERM);
-        var status: u32 = 0;
+        var status: i32 = 0;
         _ = linux.wait4(pid, &status, 0, null);
         rt.host.pid = null;
     }
@@ -1981,7 +1981,7 @@ fn shutdown() void {
         sendRenderer(r, .stop, &.{});
         if (r.pid) |pid| {
             _ = linux.kill(pid, linux.SIG.TERM);
-            var status: u32 = 0;
+            var status: i32 = 0;
             _ = linux.wait4(pid, &status, 0, null);
         }
         if (r.pidfd >= 0) _ = linux.close(r.pidfd);

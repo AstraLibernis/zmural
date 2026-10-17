@@ -61,7 +61,7 @@ pub fn encodeMessage(comptime M: type, msg: M, out: []u8) Error![]const u8 {
     if (e.pos > max_body_len) return error.BodyTooLarge;
     const Tag = @typeInfo(M).@"union".tag_type.?;
     const tag: Tag = msg;
-    const header: Header = .{ .opcode = @intFromEnum(tag), .body_len = @intCast(e.pos) };
+    const header: Header = .{ .opcode = @backingInt(tag), .body_len = @intCast(e.pos) };
     header.write(out[0..header_len]);
     return out[0 .. header_len + e.pos];
 }
@@ -70,12 +70,12 @@ pub fn encodeMessage(comptime M: type, msg: M, out: []u8) Error![]const u8 {
 /// result borrow `body`.
 pub fn decodeMessage(comptime M: type, opcode: u16, body: []const u8) Error!M {
     const info = @typeInfo(M).@"union";
-    inline for (info.fields) |f| {
-        if (opcode == @intFromEnum(@field(info.tag_type.?, f.name))) {
+    inline for (info.field_names, info.field_types) |f_name, F_type| {
+        if (opcode == @backingInt(@field(info.tag_type.?, f_name))) {
             var d: Decoder = .{ .buf = body };
-            const payload = try d.value(f.type);
+            const payload = try d.value(F_type);
             if (d.pos != body.len) return error.TrailingBytes;
-            return @unionInit(M, f.name, payload);
+            return @unionInit(M, f_name, payload);
         }
     }
     return error.UnknownOpcode;
@@ -112,7 +112,7 @@ const Encoder = struct {
             .int => try e.int(T, v),
             .bool => try e.int(u8, @intFromBool(v)),
             .float => try e.int(FloatBits(T), @bitCast(v)),
-            .@"enum" => |en| try e.int(ByteInt(en.tag_type), @intFromEnum(v)),
+            .@"enum" => |en| try e.int(ByteInt(en.tag_type), @backingInt(v)),
             .pointer => {
                 comptime assertString(T);
                 if (v.len > max_body_len) return error.BodyTooLarge;
@@ -123,7 +123,7 @@ const Encoder = struct {
                 try e.int(u8, 1);
                 try e.value(o.child, x);
             } else try e.int(u8, 0),
-            .@"struct" => |s| inline for (s.fields) |f| try e.value(f.type, @field(v, f.name)),
+            .@"struct" => |s| inline for (s.field_names, s.field_types) |f_name, F_type| try e.value(F_type, @field(v, f_name)),
             .array => |a| for (v) |x| try e.value(a.child, x),
             else => @compileError("zmural wire: unsupported type " ++ @typeName(T)),
         }
@@ -159,8 +159,8 @@ const Decoder = struct {
             .float => return @bitCast(try d.int(FloatBits(T))),
             .@"enum" => |en| {
                 const raw = try d.int(ByteInt(en.tag_type));
-                inline for (en.fields) |f| {
-                    if (raw == f.value) return @field(T, f.name);
+                inline for (en.field_names, en.field_values) |f_name, f_value| {
+                    if (raw == f_value) return @field(T, f_name);
                 }
                 return error.InvalidEnum;
             },
@@ -176,7 +176,7 @@ const Decoder = struct {
             },
             .@"struct" => |s| {
                 var out: T = undefined;
-                inline for (s.fields) |f| @field(out, f.name) = try d.value(f.type);
+                inline for (s.field_names, s.field_types) |f_name, F_type| @field(out, f_name) = try d.value(F_type);
                 return out;
             },
             .array => |a| {
@@ -205,7 +205,7 @@ fn FloatBits(comptime F: type) type {
 
 fn assertString(comptime T: type) void {
     const p = @typeInfo(T).pointer;
-    if (p.size != .slice or p.child != u8 or !p.is_const)
+    if (p.size != .slice or p.child != u8 or !p.attrs.@"const")
         @compileError("zmural wire: only []const u8 slices are supported, got " ++ @typeName(T));
 }
 

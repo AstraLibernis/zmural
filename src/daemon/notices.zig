@@ -93,5 +93,4 @@ test "a notice is remembered across reads, per key, in a directory made on deman
     remember(io, gpa, dir, "cpu-decode hevc");
     try std.testing.expect(seen(io, gpa, dir, "cpu-decode h264"));
     try std.testing.expect(seen(io, gpa, dir, "cpu-decode hevc"));
-
 }

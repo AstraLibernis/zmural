@@ -49,7 +49,7 @@ fn write(init: std.process.Init, video: []const u8, out: []const u8, max_px: ?u1
 
     const h = api.create() orelse return error.MpvCreate;
     defer api.terminate_destroy(h);
-    const dir_z = try gpa.dupeZ(u8, dir);
+    const dir_z = try gpa.dupeSentinel(u8, dir, 0);
     defer gpa.free(dir_z);
     const options = [_][2][:0]const u8{
         .{ "vo", "image" },
@@ -73,7 +73,7 @@ fn write(init: std.process.Init, video: []const u8, out: []const u8, max_px: ?u1
         if (api.set_option_string(h, "vf", vf) < 0) return error.MpvOption;
     }
     if (api.initialize(h) < 0) return error.MpvInit;
-    const video_z = try gpa.dupeZ(u8, video);
+    const video_z = try gpa.dupeSentinel(u8, video, 0);
     defer gpa.free(video_z);
     const cmd = [_]?[*:0]const u8{ "loadfile", video_z, null };
     if (api.command(h, &cmd) < 0) return error.MpvLoad;

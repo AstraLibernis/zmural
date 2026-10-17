@@ -50,7 +50,7 @@ pub fn start(init: std.process.Init, args: []const []const u8) !void {
             // quitting zmural (or its death) takes the wallpaper away.
             i += 1;
             const parent = if (i < args.len) std.fmt.parseInt(linux.pid_t, args[i], 10) catch 0 else 0;
-            _ = linux.prctl(@intFromEnum(linux.PR.SET_PDEATHSIG), @intFromEnum(linux.SIG.TERM), 0, 0, 0);
+            _ = linux.prctl(@backingInt(linux.PR.SET_PDEATHSIG), @backingInt(linux.SIG.TERM), 0, 0, 0);
             // It may have died before the line above ran.
             if (linux.getppid() != parent) return;
         } else if (std.mem.eql(u8, a, "--version")) {
