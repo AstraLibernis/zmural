@@ -1,10 +1,10 @@
 # Building zmural
 
-zmural is written in Zig 0.16 and built with `zig build`. One codebase builds a separate program for each OS; either OS can cross-compile the other's programs. The Windows release zip can only be made on Windows (it uses Windows' own `tar.exe`).
+zmural is written in Zig 0.17 and built with `zig build`. One codebase builds a separate program for each OS; either OS can cross-compile the other's programs. The Windows release zip can only be made on Windows (it uses Windows' own `tar.exe`).
 
 ## Windows
 
-You need Zig 0.16 and two third-party runtimes, which aren't in git; `.github/workflows/ci.yml` fetches the pinned builds and shows where they come from (see also [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)):
+You need Zig 0.17 and two third-party runtimes, which aren't in git; `.github/workflows/ci.yml` fetches the pinned builds and shows where they come from (see also [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)):
 
 - `third_party/mpv/`: `libmpv-2.dll` (an LGPL build of mpv) and `SOURCE.txt`.
 - `third_party/webview2/`: `WebView2Loader.dll`, `LICENSE.txt`, `NOTICE.txt` and `SOURCE.txt`, for web wallpapers.
@@ -18,7 +18,7 @@ zig build package -Doptimize=ReleaseFast -Dtarget=x86_64-windows   # the release
 
 ## Linux
 
-You need Zig 0.16 and the runtime libraries from the README's [Install](../README.md#install) section. The KDE plugin and the GNOME extension have build tools of their own: CMake, Ninja, pkg-config, gettext, EGL/GLES/GBM dev files, and Qt 6 (KDE) or GTK 4.10+ and GObject-Introspection (GNOME). The full list is the package list in `tools/plugin-root.sh`. `-Dplugin-root` also needs `bwrap` (bubblewrap), and `package` needs `objcopy` (binutils).
+You need Zig 0.17 and the runtime libraries from the README's [Install](../README.md#install) section. The KDE plugin and the GNOME extension have build tools of their own: CMake, Ninja, pkg-config, gettext, EGL/GLES/GBM dev files, and Qt 6 (KDE) or GTK 4.10+ and GObject-Introspection (GNOME). The full list is the package list in `tools/plugin-root.sh`. `-Dplugin-root` also needs `bwrap` (bubblewrap), and `package` needs `objcopy` (binutils).
 
 ```
 zig build -Doptimize=ReleaseFast                   # the programs, in zig-out/bin

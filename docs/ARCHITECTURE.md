@@ -106,7 +106,7 @@ The plan, release by release, is in [MILESTONES.md](MILESTONES.md): 0.1.1 makes 
 ## Project layout
 ```
 zmural/
-├── build.zig / build.zig.zon     # Zig 0.16
+├── build.zig / build.zig.zon     # Zig 0.17
 ├── src/
 │   ├── zmural.zig                # shared library module: @import("zmural")
 │   ├── protocol/                 # wire framing + control / renderer / display protocols

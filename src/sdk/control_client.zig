@@ -105,6 +105,7 @@ test absolutePath {
 
 /// Comptime string repeat (the ** array operator was removed in Zig 0.17).
 fn repeat(comptime s: []const u8, comptime n: usize) *const [s.len * n]u8 {
+    @setEvalBranchQuota(1000 + 4 * s.len * n);
     const arr: [s.len * n]u8 = comptime blk: {
         var out: [s.len * n]u8 = undefined;
         for (0..n) |i| @memcpy(out[i * s.len ..][0..s.len], s);
