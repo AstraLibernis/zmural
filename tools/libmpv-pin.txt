@@ -1,0 +1,9 @@
+# The one libmpv build zmural's Windows release ships. Read by tools/libmpv.ps1
+# (which CI runs); change it with `tools/libmpv.ps1 -Update`, never by hand.
+# Upstream keeps only recent builds: see docs/RELEASING.md, "The pinned libmpv".
+repo=zhongfly/mpv-winbuild
+tag=2026-11-20-ee54be6e1d
+asset=mpv-dev-lgpl-x86_64-20261120-git-ee54be6e1d.7z
+archive_sha256=aa07b7e9213bfebc3e4118071d95efcf95fa0547690e6999421a724674f4c7ad
+dll_sha256=60bfa558444375bd2e8e1260cd23d3b242630c3b27d0f646725fdb399bd22453
+mpv_commit=ee54be6e1d

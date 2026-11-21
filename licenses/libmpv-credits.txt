@@ -5,7 +5,7 @@ zmural's Windows release plays video and pictures with libmpv-2.dll, a
 build of mpv (LGPL) by the mpv-winbuild project:
 
   https://github.com/zhongfly/mpv-winbuild
-  release 2026-09-26-a1bf4b6559, mpv-dev-lgpl-x86_64-20260926-git-a1bf4b6559.7z
+  release 2026-11-20-ee54be6e1d, mpv-dev-lgpl-x86_64-20261120-git-ee54be6e1d.7z
   built with https://github.com/shinchiro/mpv-winbuild-cmake
 
 That one file holds the work of everyone below. They are listed from the
@@ -110,6 +110,9 @@ Sound
   libmodplug
       https://github.com/Konstanty/libmodplug
       public domain
+  OpenAL Soft (FFmpeg's sound input)
+      https://github.com/kcat/openal-soft
+      LGPL-2.0-or-later
 
 Subtitles and text
 ------------------
@@ -191,6 +194,9 @@ Discs, network and compression
   libcurl
       https://github.com/curl/curl
       curl licence (MIT-style)
+  libssh (inside libcurl)
+      https://www.libssh.org/
+      LGPL-2.1-or-later
   OpenSSL
       https://github.com/openssl/openssl
       Apache-2.0
@@ -253,8 +259,9 @@ Scripting and the rest
       MIT
 
 Left out of this build (GPL-only or not needed): x264, x265, davs2,
-Rubber Band, libdvdnav, libdvdread, libssh, libsrt, zvbi, LZO, OpenAL Soft
-and AviSynth.
+Rubber Band, libdvdnav, libdvdread, libsrt, zvbi, LZO and AviSynth. (mpv
+and FFmpeg are built without libssh and mpv without OpenAL, but libcurl
+brings libssh in and FFmpeg OpenAL Soft: both are credited above.)
 
 zmural loads libmpv-2.dll at runtime and does not change it; it can be
 replaced with any compatible libmpv build. See THIRD_PARTY_NOTICES.md.

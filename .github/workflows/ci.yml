@@ -255,22 +255,21 @@ jobs:
           if ($d.ExitCode -ne 0) { throw "zmural exited with $($d.ExitCode)" }
       # The release zip ships libmpv and WebView2's loader, which aren't in the
       # repository: fetch the exact builds THIRD_PARTY_NOTICES.md names, and
-      # refuse anything whose hash differs.
+      # refuse anything whose hash differs. libmpv's pin is tools/libmpv-pin.txt
+      # (tools/libmpv.ps1 fetches it and checks that every file names it).
       - name: Fetch the pinned libmpv and WebView2 loader
         shell: pwsh
         run: |
-          $mpvUrl = "https://github.com/zhongfly/mpv-winbuild/releases/download/2026-09-26-a1bf4b6559/mpv-dev-lgpl-x86_64-20260926-git-a1bf4b6559.7z"
-          $mpvSha = "e37f712fbaae47e5140d66de7969fab65bbc68ce78435938b3fc7eed56033dc8"
+          ./tools/libmpv.ps1
+          if ($LASTEXITCODE -ne 0) { throw "the pinned libmpv could not be fetched" }
+          ./tools/libmpv.ps1 -Verify
+          if ($LASTEXITCODE -ne 0) { throw "the libmpv pin and the files that name it disagree" }
           $wvUrl = "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.4191.47"
           $wvSha = "f492bbf547d0da329553b6727435b677579b1e9f91cc9e4a1ad029366d5f23d0"
-          $mpv = "$env:RUNNER_TEMP\mpv.7z"; $wv = "$env:RUNNER_TEMP\webview2.zip"
-          Invoke-WebRequest $mpvUrl -OutFile $mpv
+          $wv = "$env:RUNNER_TEMP\webview2.zip"
           Invoke-WebRequest $wvUrl -OutFile $wv
-          if ((Get-FileHash $mpv -Algorithm SHA256).Hash -ne $mpvSha) { throw "libmpv archive hash differs" }
           if ((Get-FileHash $wv -Algorithm SHA256).Hash -ne $wvSha) { throw "WebView2 package hash differs" }
-          New-Item -ItemType Directory -Force third_party\mpv, third_party\webview2 | Out-Null
-          7z e $mpv libmpv-2.dll -othird_party\mpv -y | Out-Null
-          "Source: $mpvUrl`nSHA-256 of the archive: $mpvSha`nmpv commit: a1bf4b6559 (LGPL build, -Dgpl=false)" | Out-File -Encoding utf8 third_party\mpv\SOURCE.txt
+          New-Item -ItemType Directory -Force third_party\webview2 | Out-Null
           Expand-Archive $wv -DestinationPath "$env:RUNNER_TEMP\webview2"
           Copy-Item "$env:RUNNER_TEMP\webview2\build\native\x64\WebView2Loader.dll" third_party\webview2\
           Copy-Item "$env:RUNNER_TEMP\webview2\LICENSE.txt", "$env:RUNNER_TEMP\webview2\NOTICE.txt" third_party\webview2\

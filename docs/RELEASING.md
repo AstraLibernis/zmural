@@ -81,17 +81,56 @@ asset of the GitHub release (it holds nothing secret; the source is public anywa
 it can't be rebuilt later: a new build has a new build ID and different addresses.
 
 Before publishing:
-- **Windows, libmpv (2026-10-12):** `licenses/libmpv-credits.txt` credits every project
-  inside `libmpv-2.dll`, listed from mpv-winbuild-cmake's recipe (`packages/*.cmake`,
-  following DEPENDS from mpv, minus what zhongfly's `compile-lgpl-libmpv.patch` drops).
-  Redo it whenever the pinned libmpv changes. Still open before the first Windows
-  release: keep a copy of the mpv and FFmpeg sources that build used, so the LGPL source
-  offer doesn't depend on the zhongfly release staying up.
+- **Windows, libmpv:** `tools/libmpv.ps1 -Check` (is the pinned build still upstream?)
+  and `-Verify`; see [The pinned libmpv](#the-pinned-libmpv) below. Still open before
+  the first Windows release: keep a copy of the mpv and FFmpeg sources that build used,
+  so the LGPL source offer doesn't depend on the zhongfly release staying up.
 - Linux: `tools/package-test.sh` (the tarball extracted into an empty home) and
   `tools/package-debian-test.sh` (inside Debian 12).
 - Windows: CI unzips the package into an empty folder on the Windows runner and runs it;
   on a real Windows desktop, [WINDOWS-PASS.md](WINDOWS-PASS.md) before publishing (no
   runner clicks a window).
+
+## The pinned libmpv
+
+The Windows release ships one exact build of `libmpv-2.dll`, from
+[zhongfly/mpv-winbuild](https://github.com/zhongfly/mpv-winbuild) (the LGPL dev
+archive). libmpv isn't in this repository: `tools/libmpv-pin.txt` names the build (its
+release tag, the archive and its SHA-256, the DLL's SHA-256, the mpv commit), and
+`tools/libmpv.ps1` is the only thing that reads or changes it. CI runs the same script.
+
+| Command | What it does |
+|---|---|
+| `tools/libmpv.ps1` | Downloads the pinned archive, refuses it if a hash differs, puts `libmpv-2.dll` and `SOURCE.txt` in `third_party/mpv` |
+| `tools/libmpv.ps1 -Verify` | No network. Fails unless `THIRD_PARTY_NOTICES.md` and `licenses/libmpv-credits.txt` name the pinned build, `ci.yml` names none of its own, and the local DLL is that build |
+| `tools/libmpv.ps1 -Check` | Asks upstream whether the pinned build is still there (exit code 2 when it is gone) and whether a newer one exists |
+| `tools/libmpv.ps1 -Update` | Moves the pin to the newest upstream build, fetches it, and rewrites the two files that name it |
+
+**Upstream keeps only recent builds** (it publishes several a day and deletes old ones),
+so a pin stops downloading after a while: that is what broke the first pin
+(2026-09-26, gone by 2026-11-20). Run `-Check` before every release and whenever a
+Windows build can't fetch libmpv; when the pin is gone, `-Update`.
+
+After every `-Update`, by hand:
+
+1. **Redo `licenses/libmpv-credits.txt`.** It credits every project inside the DLL.
+   Clone [shinchiro/mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake),
+   apply zhongfly's `compile-lgpl-libmpv.patch` to it, and follow `DEPENDS` from
+   `packages/mpv.cmake` through `packages/*.cmake`; compare that list with the file. A
+   library can come in through another one (libssh through libcurl, OpenAL Soft through
+   FFmpeg) after the patch drops it from mpv, so follow every package, and look for its
+   name in the DLL when unsure.
+2. `zig build test`, then a release package (above).
+3. A Windows pass on a real desktop ([WINDOWS-PASS.md](WINDOWS-PASS.md)): at least a
+   video, a picture and a GIF playing, with `hwdec=d3d11va` in the log for the video.
+   zmural accepts any libmpv whose client API is version 2 (`src/os/libmpv.zig`).
+
+History of the pin:
+
+| Since | Build | mpv commit |
+|---|---|---|
+| 2026-09-26 | `2026-09-26-a1bf4b6559` | `a1bf4b6559` |
+| 2026-11-21 | `2026-11-20-ee54be6e1d` | `ee54be6e1d` |
 
 ## Reading a crash report from a released build
 
