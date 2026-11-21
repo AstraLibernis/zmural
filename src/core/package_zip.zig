@@ -200,7 +200,23 @@ pub const Unpacked = struct {
     name: []const u8,
     /// A Lively package's settings that have no counterpart, as "name (type)".
     left_out: []const []const u8 = &.{},
+    /// Files that were not unpacked because the Windows shell acts on them
+    /// (see `isShellFile`).
+    shell_files: u32 = 0,
 };
+
+/// A file the Windows shell reads and acts on when its folder is merely
+/// opened: shortcuts, saved searches, library descriptions and a folder's
+/// `desktop.ini`. Each can name an icon or a target on a remote server, and
+/// Explorer then signs in there with the user's login. A wallpaper has no use
+/// for one, so they are left out when unpacking.
+pub fn isShellFile(path: []const u8) bool {
+    const base = path[if (std.mem.findScalarLast(u8, path, '/')) |i| i + 1 else 0..];
+    if (std.ascii.eqlIgnoreCase(base, "desktop.ini")) return true;
+    const endings = [_][]const u8{ ".lnk", ".url", ".scf", ".pif", ".library-ms", ".search-ms", ".searchConnector-ms" };
+    for (endings) |e| if (std.ascii.endsWithIgnoreCase(base, e)) return true;
+    return false;
+}
 
 /// Unpacks a checked zip into `parent`, as a new folder named `name` (or
 /// `name (2)`... when taken).
@@ -216,6 +232,7 @@ pub const BeforePublish = struct {
 
 pub fn unpack(arena: std.mem.Allocator, io: Io, fr: *Io.File.Reader, checked: Checked, parent: Io.Dir, name: []const u8, diag: *Diagnostic, before: ?BeforePublish) Error!Unpacked {
     var left_out: []const []const u8 = &.{};
+    var shell_files: u32 = 0;
     // Its own name each time: on Windows a folder just deleted (an earlier
     // import's) can linger, pending deletion, and refuse to be reused.
     // Not named after the wallpaper, so a long name can't make it too long.
@@ -232,6 +249,11 @@ pub fn unpack(arena: std.mem.Allocator, io: Io, fr: *Io.File.Reader, checked: Ch
         var name_buf: [Io.Dir.max_path_bytes]u8 = undefined;
         while (true) {
             const entry = (it.next() catch |err| return mapIterError(err)) orelse break;
+            const info = readCentral(arena, fr, entry) catch return error.NotAZip;
+            if (!isDir(info.name) and isShellFile(info.name)) {
+                shell_files += 1;
+                continue;
+            }
             entry.extract(fr, .{ .allow_backslashes = true }, &name_buf, dest) catch |err| {
                 diag.set(name_buf[0..@min(entry.filename_len, name_buf.len)]);
                 diag.cause = err;
@@ -260,7 +282,7 @@ pub fn unpack(arena: std.mem.Allocator, io: Io, fr: *Io.File.Reader, checked: Ch
     try renamePatiently(io, parent, from, final, diag);
     ok = true;
     if (checked.root.len > 0) parent.deleteTree(io, tmp) catch {}; // zsnag:ok — only the emptied wrapper is left
-    return .{ .name = final, .left_out = left_out };
+    return .{ .name = final, .left_out = left_out, .shell_files = shell_files };
 }
 
 /// The folder name to suggest: the zip's own top folder, else its file name
@@ -769,6 +791,51 @@ test "a package unpacks without its top folder, and a second import gets its own
     // Nothing hidden is left behind.
     var it = tmp.dir.iterate();
     while (try it.next(io)) |e| try std.testing.expect(e.name[0] != '.');
+}
+
+test "shortcuts and other files the Windows shell acts on are left out, the rest is unpacked" {
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const pkg = [_]Stored{
+        .{ .name = "rain.mp4", .data = "not really a video" },
+        .{ .name = "Open me.LNK", .data = "x" },
+        .{ .name = "site.url", .data = "[InternetShortcut]\nIconFile=\\\\server\\share\\i.ico\n" },
+        .{ .name = "desktop.ini", .data = "x" },
+        .{ .name = "extras/Desktop.ini", .data = "x" },
+        .{ .name = "extras/a.scf", .data = "x" },
+        .{ .name = "extras/b.library-ms", .data = "x" },
+        .{ .name = "extras/c.searchConnector-ms", .data = "x" },
+        .{ .name = "extras/d.search-ms", .data = "x" },
+        .{ .name = "extras/e.pif", .data = "x" },
+        .{ .name = "extras/notes.txt", .data = "kept" },
+        // Only the ending counts, and only on a file.
+        .{ .name = "extras/lnk", .data = "kept" },
+        .{ .name = "extras/url.txt", .data = "kept" },
+    };
+    {
+        var buf: [4096]u8 = undefined;
+        const f = try tmp.dir.createFile(io, "a.zip", .{});
+        defer f.close(io);
+        var fw = f.writer(io, &buf);
+        try writeStored(a, &fw.interface, &pkg);
+        try fw.interface.flush();
+    }
+    const f = try tmp.dir.openFile(io, "a.zip", .{});
+    defer f.close(io);
+    var rbuf: [4096]u8 = undefined;
+    var fr = f.reader(io, &rbuf);
+    var diag: Diagnostic = .{};
+    const checked = try check(a, &fr, .{}, &diag);
+    const made = try unpack(a, io, &fr, checked, tmp.dir, "out", &diag, null);
+    try std.testing.expectEqual(@as(u32, 9), made.shell_files);
+    for ([_][]const u8{ "out/rain.mp4", "out/extras/notes.txt", "out/extras/lnk", "out/extras/url.txt" }) |kept|
+        (try tmp.dir.openFile(io, kept, .{})).close(io);
+    for ([_][]const u8{ "out/Open me.LNK", "out/site.url", "out/desktop.ini", "out/extras/Desktop.ini", "out/extras/a.scf", "out/extras/b.library-ms", "out/extras/c.searchConnector-ms", "out/extras/d.search-ms", "out/extras/e.pif" }) |gone|
+        try std.testing.expectError(error.FileNotFound, tmp.dir.openFile(io, gone, .{}));
 }
 
 test "refused before anything is written: escapes, links, size, and the wrong content" {

@@ -127,11 +127,17 @@ pub fn run(init: std.process.Init, out: *std.Io.Writer, args: []const []const u8
             .lively => "a Lively wallpaper (converted to a zmural package)",
             .media => "wallpapers",
         },
-        checked.files,
-        if (checked.files == 1) "" else "s",
+        checked.files - made.shell_files,
+        if (checked.files - made.shell_files == 1) "" else "s",
         checked.bytes,
         folder,
     });
+    if (made.shell_files > 0) {
+        try out.print("left out {d} shortcut-type file{s} (.lnk, .url, desktop.ini and the like): opening a folder that holds one can send your Windows login to another computer\n", .{
+            made.shell_files,
+            if (made.shell_files == 1) "" else "s",
+        });
+    }
     if (made.left_out.len > 0) {
         try out.writeAll("left out (no counterpart in zmural):");
         for (made.left_out) |l| try out.print(" {s}", .{l});

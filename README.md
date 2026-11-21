@@ -190,7 +190,7 @@ Wallpapers are files people download, so zmural treats them as untrusted. It sho
   - **A page can't leave its own folder:** any navigation to another address is cancelled.
   - **Every wallpaper is kept apart:** each local folder is its own web origin, and every web wallpaper gets its own browser profile (cookies, storage, cache), so one can't read another's data.
   - Property values are checked against the wallpaper's manifest before they are stored or passed to it.
-- **Zip imports** run in `zmural-console`, never inside zmural, and are checked before anything is written (see [Everyday use](#everyday-use)). On Windows, unpacked files keep the zip's "downloaded from the internet" mark, so SmartScreen still warns before any program among them runs.
+- **Zip imports** run in `zmural-console`, never inside zmural, and are checked before anything is written (see [Everyday use](#everyday-use)). On Windows, unpacked files keep the zip's "downloaded from the internet" mark, so SmartScreen still warns before any program among them runs. Shortcut-type files (`.lnk`, `.url`, `.scf`, `.pif`, `.library-ms`, `.search-ms`, `.searchConnector-ms`, `desktop.ini`) are left out of every import, on both systems: merely opening a folder that holds one can make Windows Explorer sign in to a remote server with your login. The import says how many it left out.
 - **Game-safe:** no code injection, no debugger attach, no drivers, no hooks into other processes.
 
 **Known limitations** (2 to 5 and 7 concern web wallpapers, which are Windows-only so far)
