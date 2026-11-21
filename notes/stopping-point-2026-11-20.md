@@ -44,21 +44,42 @@ the maintainer's word ("single out the Windows-only bugs for now").
 
 ## Left over
 
+### Done on 2026-11-21, on the maintainer's desktop (after this note was written)
+
+- **Live Windows pass of the fixes above:** a playing video cut to 0 and to 4096 bytes
+  with `hwdec=d3d11va` (both caught in under a second, Prism took over, no CPU spin); an
+  Explorer restart (the wallpaper back under the icons within 4 s, tray icon back);
+  renderers at below-normal CPU priority. A logoff was only simulated (WM_QUERYENDSESSION
+  and WM_ENDSESSION sent to zmural's windows with the settings window open: settings
+  saved, every process gone in about half a second). The GPU priority can't be read from
+  another process without elevation; the renderer logged no refusal. Not run: the 60 fps
+  clip's CPU, and the hook switching under a real fullscreen game.
+- **Fresh install** from a locally built package (old install uninstalled first, the
+  wallpaper folder untouched): Welcome, Prism, start at login on, Start menu and Apps
+  entries.
+- **Shortcut-type files are left out of imports** (the maintainer's decision), see the
+  README's Security section; `package_zip.isShellFile`.
+- **libmpv is pinned again**, at `2026-11-20-ee54be6e1d`, through one pin file and one
+  script (`tools/libmpv-pin.txt`, `tools/libmpv.ps1`; docs/RELEASING.md, "The pinned
+  libmpv"). `licenses/libmpv-credits.txt` was redone from the recipe: libssh (through
+  libcurl) and OpenAL Soft (through FFmpeg) are inside the DLL and were wrongly listed as
+  left out, for the old build too. The reworked CI step has not run (CI is on hold).
+
 ### Needs the maintainer
 
-- **CI's pinned libmpv is gone upstream.** `ci.yml` downloads
+- (Decided 2026-11-21, see above.) **CI's pinned libmpv is gone upstream.** `ci.yml` downloads
   `zhongfly/mpv-winbuild` 2026-09-26-a1bf4b6559, which now returns "Not Found": the Windows CI
   job and releases can't fetch it. That repo keeps only recent builds, so any pin to it breaks
   again. Options: pin a current build and update often; or keep our own copy of the archive (for
   example as an asset on a zmural release) with its hash. The local test build used
   2026-11-20-ee54be6e1d (sha256 aa07b7e9…), which also changes `licenses/libmpv-credits.txt`
   if adopted. CI is still on hold, so nothing was run.
-- **Shortcut-type files in imports** (`.lnk`, `.url`, `.scf`, `.library-ms`, `desktop.ini`):
+- (Decided 2026-11-21: left out.) **Shortcut-type files in imports** (`.lnk`, `.url`, `.scf`, `.library-ms`, `desktop.ini`):
   browsing such a folder in Explorer can leak the Windows login hash to a remote server
   (CVE-2025-24054 class). Not changed, because the standing rule is that what a package
   holds is the user's call. Choices: refuse them, leave them out (like Lively's unsupported
   parts), or keep as is.
-- **A live Windows pass of today's fixes** on a real desktop: the watchdog with `d3d11va` (cut
+- (Mostly done 2026-11-21, see above.) **A live Windows pass of today's fixes** on a real desktop: the watchdog with `d3d11va` (cut
   a playing video to 0 and 4096 bytes), an Explorer restart (wallpaper below the icons), a
   logoff with the settings window open, CPU/GPU priority in Task Manager (renderers below
   normal), and a 60 fps clip's CPU before and after.
