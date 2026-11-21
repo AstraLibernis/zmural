@@ -16,6 +16,7 @@
 //!   requests are answered on the UI thread, one reply per request.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const zmural = @import("zmural");
 const w = zmural.os.win32;
 const pipe = zmural.protocol.pipe;
@@ -42,6 +43,10 @@ pub const Server = struct {
     msg: w.UINT,
     clients: std.ArrayList(*Client) = .empty,
     next_id: usize = 1,
+    /// The last try to open a waiting instance failed (logged once).
+    listen_failed: bool = false,
+    /// Tests only: how many of the next opens fail as if Windows refused them.
+    fail_opens: u32 = 0,
 
     /// Claims the control pipe. `error.InUse`: someone already owns the name.
     pub fn start(gpa: std.mem.Allocator, name: []const u8, hwnd: w.HWND, msg: w.UINT) pipe.Error!Server {
@@ -58,6 +63,10 @@ pub const Server = struct {
         // Reserve the list slot first: once the reader runs, nothing may fail
         // and free the client under it.
         try s.clients.ensureUnusedCapacity(s.gpa, 1);
+        if (builtin.is_test and s.fail_opens > 0) {
+            s.fail_opens -= 1;
+            return error.PipeFailed;
+        }
         const c = try s.gpa.create(Client);
         errdefer s.gpa.destroy(c);
         c.* = .{ .id = s.next_id, .conn = try pipe.listen(s.gpa, s.name, .{ .first = first, .max_instances = w.PIPE_UNLIMITED_INSTANCES }) };
@@ -85,13 +94,11 @@ pub const Server = struct {
             .connected => {
                 c.connected_ms = now;
                 // This instance is taken: open the next one for whoever comes after.
-                s.listen(false) catch |err| std.log.err("control: cannot open the next pipe instance: {s}", .{@errorName(err)});
+                s.keepListening();
             },
             .ended => {
-                const was_waiting = c.connected_ms == 0;
                 s.drop(index);
-                // Only the waiting instance failing leaves nobody listening.
-                if (was_waiting) s.listen(false) catch |err| std.log.err("control: cannot reopen the pipe: {s}", .{@errorName(err)});
+                s.keepListening();
             },
             .frame => |in| {
                 const req = in.frame().decode(control.Request) catch {
@@ -114,8 +121,29 @@ pub const Server = struct {
         }
     }
 
-    /// Drops clients that connected but never said hello.
+    /// Keeps one instance waiting for the next client. Called on every
+    /// connect, end and tick, so one failed open (handle quota, low memory)
+    /// is retried instead of leaving nobody listening for good.
+    fn keepListening(s: *Server) void {
+        if (s.waiting()) return;
+        s.listen(false) catch |err| {
+            if (!s.listen_failed) std.log.warn("control: cannot open a pipe instance (will retry): {s}", .{@errorName(err)});
+            s.listen_failed = true;
+            return;
+        };
+        if (s.listen_failed) std.log.info("control: listening again", .{});
+        s.listen_failed = false;
+    }
+
+    fn waiting(s: *const Server) bool {
+        for (s.clients.items) |c| if (c.connected_ms == 0) return true;
+        return false;
+    }
+
+    /// Drops clients that connected but never said hello, and reopens the
+    /// waiting instance if opening it failed before.
     pub fn tick(s: *Server, now: u64) void {
+        s.keepListening();
         for (s.clients.items) |c| {
             if (c.connected_ms != 0 and !c.greeted and now -| c.connected_ms > hello_timeout_ms) {
                 std.log.warn("control: client {d} never said hello; dropping it", .{c.id});

@@ -26,6 +26,7 @@ const pipe = @import("../protocol/pipe.zig");
 const testpattern = @import("testpattern.zig");
 const mpv_options = @import("mpv_options.zig");
 const stall = @import("stall.zig");
+const file_stamp = @import("file_stamp.zig");
 const FillMode = @import("../core/layout.zig").FillMode;
 
 pub const Kind = enum { image, video };
@@ -63,6 +64,10 @@ const State = struct {
     adjust: mpv_options.Adjustments = .{},
     api: ?mpv.Api = null,
     path: [:0]const u8 = "",
+    /// `ZMURAL_TEST_VO`: mpv's video output, for tests only.
+    test_vo: ?[:0]const u8 = null,
+    /// The played file as it was at start (null: on a network share, or unreadable).
+    watched: ?struct { path_w: [:0]const u16, stamp: file_stamp.Stamp } = null,
     fill: FillMode = .crop,
     fps: u16 = 30,
     volume: u8 = 50,
@@ -85,8 +90,19 @@ pub fn run(init: std.process.Init, kind: Kind, args_in: []const []const u8) !voi
     };
     st.gpa = init.gpa;
     st.path = try init.arena.allocator().dupeSentinel(u8, args.path, 0);
+    // Testing aid: `ZMURAL_TEST_VO=null` plays with no picture, for sessions
+    // with no desktop to show one on (the playback logic still runs).
+    if (init.environ_map.get("ZMURAL_TEST_VO")) |vo| st.test_vo = try init.arena.allocator().dupeSentinel(u8, vo, 0);
+    // What the file looks like now, to notice it changing while it plays.
+    if (usesMpv() and !file_stamp.isRemote(st.path)) {
+        const path_w = try std.unicode.wtf8ToWtf16LeAllocZ(init.arena.allocator(), st.path);
+        if (file_stamp.read(path_w)) |s| st.watched = .{ .path_w = path_w, .stamp = s };
+    }
 
     _ = w.SetProcessDpiAwarenessContext(w.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    // The GPU's counterpart of the job's below-normal CPU priority: when a
+    // game or a render wants the GPU, it goes first. (Logged once it can be.)
+    const gpu_status = w.D3DKMTSetProcessSchedulingPriorityClass(w.GetCurrentProcess(), .below_normal);
     st.instance = w.GetModuleHandleW(null);
     const control_class = w.L("zmural.renderer");
     const surface_class = w.L("zmural.surface");
@@ -108,6 +124,7 @@ pub fn run(init: std.process.Init, kind: Kind, args_in: []const []const u8) !voi
         };
     }
     _ = w.CloseHandle(try st.session.startReader(st.control.?, WM_DAEMON));
+    if (gpu_status != 0) st.session.log(.warn, "could not lower GPU priority (status 0x{x})", .{@as(u32, @bitCast(gpu_status))});
     st.session.log(.info, "{s} renderer for '{s}' ({s})", .{ name, args.path, if (usesMpv()) "libmpv" else "test pattern" });
 
     var msg: w.MSG = undefined;
@@ -246,7 +263,7 @@ fn setPlaying(playing: bool) void {
 fn startPlayer(s: *Surface) !void {
     const api = if (st.api) |*a| a else return error.LibmpvNotLoaded;
     const h = api.create() orelse return error.MpvCreateFailed;
-    errdefer api.terminate_destroy(h);
+    errdefer if (s.player == null) api.terminate_destroy(h);
 
     var wid_buf: [24]u8 = undefined;
     const wid = try std.fmt.bufPrintSentinel(&wid_buf, "{d}", .{@intFromPtr(s.hwnd)}, 0);
@@ -255,8 +272,12 @@ fn startPlayer(s: *Surface) !void {
         .{ "force-window", "yes" },
         mpv_options.pause(st.playing),
         mpv_options.fill(st.fill),
+        // When decoding falls back to the CPU, two threads, not one per core:
+        // a wallpaper must leave the cores to what the user is running.
+        .{ "vd-lavc-threads", "2" },
     };
     for (own ++ mpv_options.common) |o| setOption(api, h, o[0], o[1]);
+    if (st.test_vo) |vo| setOption(api, h, "vo", vo);
     // Adjustments that arrived before the player did.
     for (mpv_options.adjustments, 0..) |name, i| if (st.adjust.value(i)) |v| setOption(api, h, name, v);
     _ = api.request_log_messages(h, "warn");
@@ -267,10 +288,12 @@ fn startPlayer(s: *Surface) !void {
         st.session.log(.err, "mpv_initialize: {s}", .{std.mem.span(api.error_string(rc))});
         return error.MpvInitFailed;
     }
+    // From here the surface owns the player, so even a failed load is torn
+    // down off this thread (see the top of the file), never by the errdefer.
+    s.player = h;
     applyVolume(h);
     const load = [_]?[*:0]const u8{ "loadfile", st.path.ptr, null };
     if (api.command(h, &load) < 0) return error.MpvLoadFailed;
-    s.player = h;
 }
 
 fn setOption(api: *const mpv.Api, h: *mpv.Handle, name: [:0]const u8, value: [:0]const u8) void {
@@ -284,6 +307,9 @@ fn applyVolume(h: *mpv.Handle) void {
     const vol = std.fmt.bufPrintSentinel(&buf, "{d}", .{st.volume}, 0) catch return;
     _ = api.set_property_string(h, "volume", vol);
     _ = api.set_property_string(h, "mute", if (st.muted) "yes" else "no");
+    // Muted (the default): no audio track at all, so nothing is decoded and no
+    // audio device or thread is opened for sound nobody hears.
+    _ = api.set_property_string(h, "aid", if (st.muted) "no" else "auto");
 }
 
 /// Sets an mpv property on every player (e.g. `pause`).
@@ -424,18 +450,35 @@ fn findSurface(id: usize) ?*Surface {
 /// A player idle for `stall.limit_ms` while meant to play has stopped for
 /// good. Say so and end; the daemon starts this renderer again, and a file
 /// that can't be played any more then fails to load and is reported as such.
+///
+/// The file changing under the player ends it too, at once: cut short while
+/// it plays, mpv can spin on broken packets, busy and never idle
+/// (`file_stamp.zig`; the 2026-10-14 Windows pass, checks 2a and 2b).
 fn checkStall() void {
     const api = if (st.api) |*a| a else return;
+    if (st.watched) |f| if (file_stamp.changed(f.stamp, f.path_w)) {
+        fail("'{s}' changed while it played; starting it again", .{st.path});
+        st.watched = null;
+        w.PostQuitMessage(0);
+        return;
+    };
     const now = w.GetTickCount64();
     for (&st.surfaces) |*slot| if (slot.*) |*s| {
         if (s.closing) continue;
         const h = s.player orelse continue;
-        const stuck = st.playing and stall.coreIdle(api, h);
+        // Waiting for a slow (network) file to fill mpv's cache is idle too, but not stuck.
+        const stuck = st.playing and stall.coreIdle(api, h) and !pausedForCache(api, h);
         if (!s.stall.check(now, stuck)) continue;
         fail("stopped playing '{s}': no new frame for {d} s; starting it again", .{ st.path, stall.limit_ms / std.time.ms_per_s });
         w.PostQuitMessage(0);
         return;
     };
+}
+
+fn pausedForCache(api: *const mpv.Api, h: *mpv.Handle) bool {
+    const raw = api.get_property_string(h, "paused-for-cache") orelse return false;
+    defer api.free(raw);
+    return std.mem.eql(u8, std.mem.span(raw), "yes");
 }
 
 fn controlProc(hwnd: w.HWND, msg: w.UINT, wp: w.WPARAM, lp: w.LPARAM) callconv(.winapi) w.LRESULT {

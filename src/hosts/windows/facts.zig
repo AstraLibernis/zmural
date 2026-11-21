@@ -246,6 +246,8 @@ const watched = [_][2]w.DWORD{
 /// installing thread's message loop.
 pub const Watcher = struct {
     hooks: [watched.len]?w.HWINEVENTHOOK = @splat(null),
+    /// The noisy hooks are off (`setQuiet`).
+    quiet: bool = false,
 
     pub fn install(cb: w.WINEVENTPROC) Watcher {
         var watcher: Watcher = .{};
@@ -260,6 +262,28 @@ pub const Watcher = struct {
             if (h.*) |hook| _ = w.UnhookWinEvent(hook);
             h.* = null;
         }
+    }
+
+    /// Quiet: without the noisy hooks (windows shown, hidden or moved, which
+    /// in a game fire with every cursor move), while a fullscreen app holds
+    /// every wallpaper paused. What ends that (the game closed, minimised or
+    /// switched away) still arrives as a foreground or minimise event, and
+    /// the runtime's backstop re-check covers the rest.
+    pub fn setQuiet(watcher: *Watcher, cb: w.WINEVENTPROC, quiet: bool) void {
+        watcher.quiet = quiet;
+        for (watched, &watcher.hooks) |range, *h| {
+            if (!isNoisy(range[0])) continue;
+            if (quiet) {
+                if (h.*) |hook| _ = w.UnhookWinEvent(hook);
+                h.* = null;
+            } else if (h.* == null) {
+                h.* = w.SetWinEventHook(range[0], range[1], null, cb, 0, 0, w.WINEVENT_OUTOFCONTEXT | w.WINEVENT_SKIPOWNPROCESS);
+            }
+        }
+    }
+
+    fn isNoisy(first_event: w.DWORD) bool {
+        return first_event == w.EVENT_OBJECT_SHOW or first_event == w.EVENT_OBJECT_LOCATIONCHANGE;
     }
 };
 

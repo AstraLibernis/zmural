@@ -201,6 +201,7 @@ Wallpapers are files people download, so zmural treats them as untrusted. It sho
 5. **Web pages can play sound on their own.** Wallpapers start muted by default; if you unmute, a page can play audio without a click.
 6. **Releases aren't code-signed yet**, and there is no updater. Windows SmartScreen may warn when you run it; on Linux there is no distro package yet. Signed update checks on Windows and distro packages on Linux are planned (0.5).
 7. **Browser profiles pile up (Windows):** each web wallpaper you've shown keeps a profile folder under `%LOCALAPPDATA%\zmural\webview2`, with whatever that page stored. Nothing cleans them up while zmural stays installed; uninstalling deletes them.
+8. **Thumbnails are made inside zmural (Windows):** the settings window asks Windows for each library file's thumbnail, and Windows' (or an installed codec pack's) thumbnail handler may decode the file inside zmural's own process. A file that exploits such a handler could reach zmural itself, not just a renderer. Making thumbnails in a separate process is planned (0.5).
 
 ## Why another one?
 

@@ -82,6 +82,12 @@ pub fn requestClose() void {
 pub fn run(env: Env, _: []const u8) !void {
     st = .{};
     st.io = env.io;
+    // An import still running when the window closes goes on by itself (it
+    // applies with --apply); only our handle to it must not leak.
+    defer if (st.import_child) |c| {
+        c.close();
+        st.import_child = null;
+    };
     const gpa = env.gpa;
     _ = sys.CoInitializeEx(null, sys.COINIT_APARTMENTTHREADED | sys.COINIT_DISABLE_OLE1DDE);
     defer sys.CoUninitialize();

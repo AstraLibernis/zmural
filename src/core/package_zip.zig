@@ -69,6 +69,7 @@ pub const Error = error{
     Corrupt,
     Changed,
     CantWrite,
+    CantMark,
     OutputExists,
     NotAWallpaper,
     OutOfMemory,
@@ -131,6 +132,7 @@ pub fn describe(err: Error) []const u8 {
         error.Corrupt => "it is damaged (a file is cut short or fails its checksum)",
         error.Changed => "a file changed while it was being packed; try again once nothing is writing to it",
         error.CantWrite => "a file or folder can't be read or written",
+        error.CantMark => "its files couldn't be marked as downloaded, as the zip is",
         error.OutputExists => "that zip already exists; give another name",
         error.NotAWallpaper => "that isn't a wallpaper file, a package or a folder of them",
         error.OutOfMemory => "out of memory",
@@ -202,7 +204,17 @@ pub const Unpacked = struct {
 
 /// Unpacks a checked zip into `parent`, as a new folder named `name` (or
 /// `name (2)`... when taken).
-pub fn unpack(arena: std.mem.Allocator, io: Io, fr: *Io.File.Reader, checked: Checked, parent: Io.Dir, name: []const u8, diag: *Diagnostic) Error!Unpacked {
+/// A last step on the unpacked files while they are still in the hidden
+/// staging folder, before they appear in the library (Windows: the Mark of
+/// the Web). If it fails nothing is imported.
+pub const BeforePublish = struct {
+    ctx: *anyopaque,
+    /// `staged`: the unpacked folder, relative to `parent`. False: refuse
+    /// with `error.CantMark`.
+    run: *const fn (ctx: *anyopaque, staged: []const u8) bool,
+};
+
+pub fn unpack(arena: std.mem.Allocator, io: Io, fr: *Io.File.Reader, checked: Checked, parent: Io.Dir, name: []const u8, diag: *Diagnostic, before: ?BeforePublish) Error!Unpacked {
     var left_out: []const []const u8 = &.{};
     // Its own name each time: on Windows a folder just deleted (an earlier
     // import's) can linger, pending deletion, and refuse to be reused.
@@ -242,8 +254,9 @@ pub fn unpack(arena: std.mem.Allocator, io: Io, fr: *Io.File.Reader, checked: Ch
         if (checked.kind == .lively) left_out = try fromLively(arena, io, dest, checked.root, name, diag);
         if (checked.kind != .media) try checkManifest(arena, io, dest, checked.root, diag);
     }
-    const final = try freeName(arena, io, parent, name);
     const from = if (checked.root.len > 0) try std.fs.path.join(arena, &.{ tmp, checked.root }) else tmp;
+    if (before) |b| if (!b.run(b.ctx, from)) return error.CantMark;
+    const final = try freeName(arena, io, parent, name);
     try renamePatiently(io, parent, from, final, diag);
     ok = true;
     if (checked.root.len > 0) parent.deleteTree(io, tmp) catch {}; // zsnag:ok — only the emptied wrapper is left
@@ -734,7 +747,7 @@ fn tryImport(arena: std.mem.Allocator, dir: Io.Dir, name: []const u8, entries: [
     var fr = f.reader(io, &rbuf);
     var diag: Diagnostic = .{};
     const checked = try check(arena, &fr, limits, &diag);
-    return (try unpack(arena, io, &fr, checked, dir, "out", &diag)).name;
+    return (try unpack(arena, io, &fr, checked, dir, "out", &diag, null)).name;
 }
 
 test "a package unpacks without its top folder, and a second import gets its own name" {
@@ -910,6 +923,54 @@ test "a package whose manifest is bad or names a missing file leaves nothing" {
     try std.testing.expectError(error.FileNotFound, tmp.dir.access(io, "out", .{}));
 }
 
+const MarkProbe = struct {
+    dir: Io.Dir,
+    ok: bool,
+    /// The file was in the hidden staging folder when the step ran.
+    saw_staged: bool = false,
+
+    fn run(ctx: *anyopaque, staged: []const u8) bool {
+        const p: *MarkProbe = @ptrCast(@alignCast(ctx)); // zsnag:ok — the test passes a *MarkProbe
+        var buf: [256]u8 = undefined;
+        const file = std.mem.print(&buf, "{s}/rain.mp4", .{staged}) catch return false;
+        p.saw_staged = staged[0] == '.' and if (p.dir.access(std.testing.io, file, .{})) |_| true else |_| false;
+        return p.ok;
+    }
+};
+
+test "the step before publishing runs on the staged files; if it fails nothing is imported" {
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    var buf: [512]u8 = undefined;
+    var w: Io.Writer = .fixed(&buf);
+    try writeStored(arena.allocator(), &w, &.{.{ .name = "rain.mp4", .data = "the video bytes" }});
+    try tmp.dir.writeFile(io, .{ .sub_path = "m.zip", .data = w.buffered() });
+
+    for ([_]bool{ false, true }) |ok| {
+        const f = try tmp.dir.openFile(io, "m.zip", .{});
+        defer f.close(io);
+        var rbuf: [512]u8 = undefined;
+        var fr = f.reader(io, &rbuf);
+        var diag: Diagnostic = .{};
+        const checked = try check(arena.allocator(), &fr, .{}, &diag);
+        var probe: MarkProbe = .{ .dir = tmp.dir, .ok = ok };
+        const before: BeforePublish = .{ .ctx = &probe, .run = MarkProbe.run };
+        if (ok) {
+            const made = try unpack(arena.allocator(), io, &fr, checked, tmp.dir, "out", &diag, before);
+            try tmp.dir.access(io, try arena.allocator().print("{s}/rain.mp4", .{made.name}), .{});
+        } else {
+            try std.testing.expectError(error.CantMark, unpack(arena.allocator(), io, &fr, checked, tmp.dir, "out", &diag, before));
+            try std.testing.expectError(error.FileNotFound, tmp.dir.access(io, "out", .{}));
+            var it = tmp.dir.iterate();
+            while (try it.next(io)) |e| try std.testing.expect(e.name[0] != '.');
+        }
+        try std.testing.expect(probe.saw_staged);
+    }
+}
+
 test "a damaged file fails its checksum and leaves nothing" {
     const io = std.testing.io;
     var tmp = std.testing.tmpDir(.{ .iterate = true });
@@ -928,7 +989,7 @@ test "a damaged file fails its checksum and leaves nothing" {
     var fr = f.reader(io, &rbuf);
     var diag: Diagnostic = .{};
     const checked = try check(arena.allocator(), &fr, .{}, &diag);
-    try std.testing.expectError(error.Corrupt, unpack(arena.allocator(), io, &fr, checked, tmp.dir, "out", &diag));
+    try std.testing.expectError(error.Corrupt, unpack(arena.allocator(), io, &fr, checked, tmp.dir, "out", &diag, null));
     try std.testing.expectEqualStrings("rain.mp4", diag.name());
     try std.testing.expectError(error.FileNotFound, tmp.dir.access(io, "out", .{}));
     var it = tmp.dir.iterate();
@@ -963,7 +1024,7 @@ test "an exported package imports back the same, and a single file on its own" {
     try tmp.dir.createDirPath(io, "back");
     var back = try tmp.dir.openDir(io, "back", .{});
     defer back.close(io);
-    try std.testing.expectEqualStrings("Neon", (try unpack(a, io, &fr, checked, back, "Neon", &diag)).name);
+    try std.testing.expectEqualStrings("Neon", (try unpack(a, io, &fr, checked, back, "Neon", &diag, null)).name);
     const copy = try back.readFileAlloc(io, "Neon/media/a.png", a, .unlimited);
     try std.testing.expectEqualStrings(repeat("pixels", 1000), copy);
 

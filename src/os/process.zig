@@ -99,7 +99,8 @@ pub fn appendQuoted(gpa: std.mem.Allocator, out: *std.ArrayList(u8), arg: []cons
 }
 
 /// A Job Object that kills every process in it when its last handle closes,
-/// including when the owning process crashes or is force-killed.
+/// including when the owning process crashes or is force-killed. Every
+/// process in it runs at below-normal priority.
 ///
 /// `ui_limits` can also fence renderers off from the rest of the session:
 /// mpv renderers decode untrusted files, so their job forbids the clipboard,
@@ -118,7 +119,12 @@ pub const Job = struct {
         const handle = w.CreateJobObjectW(null, null) orelse return error.JobFailed;
         errdefer _ = w.CloseHandle(handle);
         var info: w.JOBOBJECT_EXTENDED_LIMIT_INFORMATION = .{};
-        info.BasicLimitInformation.LimitFlags = w.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        // Below normal: a wallpaper must never take CPU from what the user is
+        // doing (a game, a build). Not idle: under a full load an idle-class
+        // renderer would stutter and miss the daemon's pings. The daemon
+        // itself stays normal, so it can still pause wallpapers at once.
+        info.BasicLimitInformation.LimitFlags = w.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | w.JOB_OBJECT_LIMIT_PRIORITY_CLASS;
+        info.BasicLimitInformation.PriorityClass = w.BELOW_NORMAL_PRIORITY_CLASS;
         if (w.SetInformationJobObject(handle, w.JobObjectExtendedLimitInformation, &info, @sizeOf(@TypeOf(info))) == 0)
             return error.JobFailed;
         var ui: w.JOBOBJECT_BASIC_UI_RESTRICTIONS = .{ .UIRestrictionsClass = ui_limits };
@@ -170,4 +176,40 @@ test appendQuoted {
         try appendQuoted(gpa, &out, c[0]);
         try std.testing.expectEqualStrings(c[1], out.items);
     }
+}
+
+test "renderers in a Job run below normal, whatever zmural runs at" {
+    if (@import("builtin").os.tag != .windows) return error.SkipZigTest;
+    const gpa = std.testing.allocator;
+    const self = w.GetCurrentProcess();
+    const was = w.GetPriorityClass(self);
+    defer _ = w.SetPriorityClass(self, was);
+    // A child inherits idle and below-normal from its parent. Start from idle
+    // (always allowed, unlike raising to normal under a capped parent): only
+    // the job's limit can make the child below normal then.
+    // Skipped where an outer job pins every process's priority (some sandboxes).
+    if (w.SetPriorityClass(self, w.IDLE_PRIORITY_CLASS) == 0 or w.GetPriorityClass(self) != w.IDLE_PRIORITY_CLASS)
+        return error.SkipZigTest;
+
+    const job = try Job.init(0);
+    defer job.deinit();
+    const exe = try selfExe(gpa);
+    defer gpa.free(exe);
+    // Our own test binary with a filter that matches nothing: it starts and exits.
+    const child = try spawn(gpa, exe, &.{"--zmural-no-such-flag"}, .{ .job = job });
+    defer child.close();
+    defer child.kill();
+    try std.testing.expectEqual(w.BELOW_NORMAL_PRIORITY_CLASS, w.GetPriorityClass(child.process));
+}
+
+test "a process can lower its own GPU priority (renderers do, at start)" {
+    if (@import("builtin").os.tag != .windows) return error.SkipZigTest;
+    const self = w.GetCurrentProcess();
+    var was: w.GpuPriority = .normal;
+    if (w.D3DKMTGetProcessSchedulingPriorityClass(self, &was) != 0) return error.SkipZigTest; // no GPU stack
+    defer _ = w.D3DKMTSetProcessSchedulingPriorityClass(self, was);
+    try std.testing.expectEqual(@as(i32, 0), w.D3DKMTSetProcessSchedulingPriorityClass(self, .below_normal));
+    var now: w.GpuPriority = .normal;
+    try std.testing.expectEqual(@as(i32, 0), w.D3DKMTGetProcessSchedulingPriorityClass(self, &now));
+    try std.testing.expectEqual(w.GpuPriority.below_normal, now);
 }

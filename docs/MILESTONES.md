@@ -142,5 +142,6 @@ Open issues, in the README's words under [Security](../README.md#security). Ever
 | S8 | both | Releases aren't code-signed and there is no updater | 0.5 |
 | S9 | Windows | Offline mode is Chromium proxy flags, not a firewall rule | 0.5: an AppContainer without network capabilities |
 | S10 | Windows | Every web wallpaper's browser profile stays in `%LOCALAPPDATA%\zmural\webview2` until uninstall | 0.5 |
+| S11 | Windows | The settings window's thumbnails (`settings/thumbs.zig`, the shell's image factory) can decode library files inside zmural's own process (found by the 2026-11-20 audit) | 0.5: thumbnails in a child process in the renderer job |
 
 Fixed issues and audits are in the retired plan.

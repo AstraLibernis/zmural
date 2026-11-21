@@ -110,3 +110,38 @@ test "an idle client can't lock others out, and is dropped after the hello timeo
     pumpFor(200);
     try testing.expectError(error.Disconnected, idle.recv(&buf));
 }
+
+test "a failed open of the next pipe instance is retried, so the pipe keeps listening (audit 2026-11-20)" {
+    if (builtin.os.tag != .windows) return error.SkipZigTest;
+    const class = w.L("zmural.test.control.retry");
+    _ = w.RegisterClassExW(&.{ .lpfnWndProc = proc, .hInstance = w.GetModuleHandleW(null), .lpszClassName = class });
+    const hwnd = w.CreateWindowExW(0, class, null, 0, 0, 0, 0, 0, w.HWND_MESSAGE, null, w.GetModuleHandleW(null), null).?;
+    defer _ = w.DestroyWindow(hwnd);
+
+    var name_buf: [96]u8 = undefined;
+    const name = try std.fmt.bufPrint(&name_buf, "\\\\.\\pipe\\zmural-test-retry-{d}", .{w.GetCurrentProcessId()});
+    server = try Server.start(gpa, name, hwnd, WM_CTL);
+    defer server.stop();
+    requests_handled = 0;
+
+    // A client takes the waiting instance; opening the next one fails twice.
+    server.fail_opens = 2;
+    var first: ClientResult = .{};
+    const t1 = try std.Thread.spawn(.{}, clientMain, .{ name, &first });
+    pumpUntil(&first.done, 5000);
+    t1.join();
+    try testing.expectEqual(@as(?anyerror, null), first.err);
+    pumpFor(100); // its end arrives; the reopen there fails too
+
+    // Nobody listens now: a client finds no instance.
+    try testing.expectError(error.NotFound, pipe.connect(gpa, name, 200));
+
+    // The next tick opens one again, and a client gets through.
+    server.tick(w.GetTickCount64());
+    var second: ClientResult = .{};
+    const t2 = try std.Thread.spawn(.{}, clientMain, .{ name, &second });
+    pumpUntil(&second.done, 5000);
+    t2.join();
+    try testing.expectEqual(@as(?anyerror, null), second.err);
+    try testing.expectEqual(@as(u32, 7), second.wallpapers);
+}

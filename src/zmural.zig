@@ -67,6 +67,8 @@ pub const sdk = struct {
     pub const mpv_options = @import("sdk/mpv_options.zig");
     /// A player that stopped by itself while meant to play (both OSes).
     pub const stall = @import("sdk/stall.zig");
+    /// A played file changed under its renderer (Windows).
+    pub const file_stamp = @import("sdk/file_stamp.zig");
     /// Windows control-protocol client (CLI, second daemon instance).
     pub const control_client = @import("sdk/control_client.zig");
     /// Linux control-protocol client (CLI, a second zmural).

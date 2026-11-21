@@ -101,7 +101,11 @@ pub fn run(init: std.process.Init, out: *std.Io.Writer, args: []const []const u8
     var parent = cwd.openDir(io, target, .{}) catch |err| fail(1, "can't open {s} ({s})", .{ target, words.of(err) });
     defer parent.close(io);
     const name = pz.folderName(path, checked);
-    const made = pz.unpack(arena, io, &fr, checked, parent, name, &diag) catch |err| {
+    // Windows: the files get the zip's Mark of the Web while still hidden in
+    // the staging folder, so none can reach the library unmarked.
+    var mark: Mark = .{ .arena = arena, .io = io, .zip_path = path, .target = target };
+    const before: ?pz.BeforePublish = if (windows) .{ .ctx = &mark, .run = Mark.run } else null;
+    const made = pz.unpack(arena, io, &fr, checked, parent, name, &diag, before) catch |err| {
         // Closed first (Windows won't remove an open folder); `refuse` exits,
         // so the deferred close never runs.
         parent.close(io);
@@ -115,14 +119,6 @@ pub fn run(init: std.process.Init, out: *std.Io.Writer, args: []const []const u8
         refuse(path, err, &diag);
     };
     const folder = try std.fs.path.join(arena, &.{ target, made.name });
-    if (windows) {
-        // Unmarked, the files would lose a warning they should have: undo it.
-        const unmarked = markLikeZip(arena, io, path, folder) catch 1;
-        if (unmarked > 0) {
-            parent.deleteTree(io, made.name) catch |err| fail(1, "{s}: its files couldn't be marked as downloaded, nor the folder removed ({s}): delete {s}", .{ path, words.of(err), folder });
-            fail(1, "not imported: {s}: its files couldn't be marked as downloaded, as the zip is", .{path});
-        }
-    }
 
     report("ok {s}", .{folder});
     try out.print("imported {s} ({d} file{s}, {Bi:.1}) into {s}\n", .{
@@ -236,6 +232,22 @@ fn connect(init: std.process.Init) ?*client.Client {
 /// Extract All does: otherwise a program that came in a package would open
 /// from the library folder without a warning. Returns how many files
 /// couldn't be marked (none when the zip has no mark).
+/// `pz.BeforePublish` for Windows: marks the staged files like the zip.
+const Mark = struct {
+    arena: std.mem.Allocator,
+    io: std.Io,
+    zip_path: []const u8,
+    target: []const u8,
+
+    fn run(ctx: *anyopaque, staged: []const u8) bool {
+        const m: *Mark = @ptrCast(@alignCast(ctx)); // zsnag:ok — import passes its own *Mark
+        const dir = std.Io.Dir.path.join(m.arena, &.{ m.target, staged }) catch return false;
+        // Unmarked, the files would lose a warning they should have.
+        const unmarked = markLikeZip(m.arena, m.io, m.zip_path, dir) catch return false;
+        return unmarked == 0;
+    }
+};
+
 fn markLikeZip(arena: std.mem.Allocator, io: std.Io, zip_path: []const u8, folder: []const u8) !usize {
     const w = zmural.os.win32;
     const zip_abs = try client.absolutePath(arena, zip_path);

@@ -204,13 +204,26 @@ fn removeWindows(arena: std.mem.Allocator, io: std.Io, env: *const std.process.E
         r.line("couldn't remove start at login: {s}", .{@errorName(err)});
         r.failed = true;
     }
-    if (env.get("ZMURAL_CONFIG_DIR")) |d| return removeTree(io, d, "its settings and log", r);
     if (env.get("APPDATA")) |base| {
         const gone = zmural.os.apps_windows.unregister(arena, base);
         if (gone.shortcut) r.line("removed the Start menu shortcut", .{});
         if (gone.entry) r.line("removed it from Settings > Apps", .{});
     }
-    if (env.get("APPDATA")) |base| removeOwn(io, try std.fs.path.join(arena, &.{ base, "zmural" }), "its settings", r);
+    if (env.get("ZMURAL_CONFIG_DIR")) |d| {
+        // The folder may be any of the user's (Documents, say): only zmural's
+        // own files go, never the folder's other contents. The log is here too.
+        for ([_][]const u8{ "zmural.log", "zmural.old.log" }) |name| {
+            const log = try std.fs.path.join(arena, &.{ d, name });
+            std.Io.Dir.cwd().deleteFile(io, log) catch |err| switch (err) {
+                error.FileNotFound => {},
+                else => {
+                    r.line("couldn't remove its log ({s}): {s}", .{ log, @errorName(err) });
+                    r.failed = true;
+                },
+            };
+        }
+        removeOwn(io, d, "its settings and log", r);
+    } else if (env.get("APPDATA")) |base| removeOwn(io, try std.fs.path.join(arena, &.{ base, "zmural" }), "its settings", r);
     // The log, and each web wallpaper's browser profile.
     if (env.get("LOCALAPPDATA")) |base| removeTree(io, try std.fs.path.join(arena, &.{ base, "zmural" }), "its log and web wallpaper data", r);
 }

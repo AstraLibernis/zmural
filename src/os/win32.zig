@@ -171,6 +171,11 @@ pub extern "user32" fn SetProcessDpiAwarenessContext(ctx: isize) callconv(.winap
 
 pub extern "gdi32" fn CreateSolidBrush(color: COLORREF) callconv(.winapi) ?HBRUSH;
 pub extern "gdi32" fn DeleteObject(obj: *anyopaque) callconv(.winapi) BOOL;
+/// D3DKMT_SCHEDULINGPRIORITYCLASS: the GPU scheduler's priority for a process.
+pub const GpuPriority = enum(i32) { idle = 0, below_normal = 1, normal = 2, above_normal = 3, high = 4, realtime = 5, _ };
+/// Both return an NTSTATUS (0: success).
+pub extern "gdi32" fn D3DKMTSetProcessSchedulingPriorityClass(process: HANDLE, priority: GpuPriority) callconv(.winapi) i32;
+pub extern "gdi32" fn D3DKMTGetProcessSchedulingPriorityClass(process: HANDLE, priority: *GpuPriority) callconv(.winapi) i32;
 
 pub extern "kernel32" fn GetModuleHandleW(name: ?[*:0]const u16) callconv(.winapi) ?HINSTANCE;
 pub extern "kernel32" fn GetCurrentThreadId() callconv(.winapi) DWORD;
@@ -301,6 +306,8 @@ pub const JOB_OBJECT_UILIMIT_GLOBALATOMS: DWORD = 0x0020;
 pub const JOB_OBJECT_UILIMIT_DESKTOP: DWORD = 0x0040;
 pub const JOB_OBJECT_UILIMIT_EXITWINDOWS: DWORD = 0x0080;
 pub const JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: DWORD = 0x00002000;
+pub const JOB_OBJECT_LIMIT_PRIORITY_CLASS: DWORD = 0x00000020;
+pub const BELOW_NORMAL_PRIORITY_CLASS: DWORD = 0x00004000;
 
 pub extern "kernel32" fn CreateNamedPipeW(name: [*:0]const u16, open_mode: DWORD, pipe_mode: DWORD, max_instances: DWORD, out_buffer: DWORD, in_buffer: DWORD, default_timeout_ms: DWORD, sa: ?*SECURITY_ATTRIBUTES) callconv(.winapi) HANDLE;
 pub extern "kernel32" fn DisconnectNamedPipe(pipe: HANDLE) callconv(.winapi) BOOL;
@@ -319,6 +326,9 @@ pub extern "kernel32" fn WaitForSingleObject(handle: HANDLE, ms: DWORD) callconv
 pub extern "kernel32" fn WaitForMultipleObjects(count: DWORD, handles: [*]const HANDLE, wait_all: BOOL, ms: DWORD) callconv(.winapi) DWORD;
 pub extern "kernel32" fn CreateProcessW(app: ?[*:0]const u16, cmd_line: ?[*:0]u16, psa: ?*SECURITY_ATTRIBUTES, tsa: ?*SECURITY_ATTRIBUTES, inherit: BOOL, flags: DWORD, env: ?*anyopaque, cwd: ?[*:0]const u16, si: *STARTUPINFOW, pi: *PROCESS_INFORMATION) callconv(.winapi) BOOL;
 pub extern "kernel32" fn TerminateProcess(process: HANDLE, code: UINT) callconv(.winapi) BOOL;
+pub extern "kernel32" fn GetPriorityClass(process: HANDLE) callconv(.winapi) DWORD;
+pub extern "kernel32" fn SetPriorityClass(process: HANDLE, class: DWORD) callconv(.winapi) BOOL;
+pub const IDLE_PRIORITY_CLASS: DWORD = 0x00000040;
 pub extern "kernel32" fn OpenProcess(access: DWORD, inherit: BOOL, pid: DWORD) callconv(.winapi) ?HANDLE;
 pub extern "kernel32" fn ResumeThread(thread: HANDLE) callconv(.winapi) DWORD;
 pub extern "kernel32" fn CreateThread(sa: ?*SECURITY_ATTRIBUTES, stack: usize, start: THREAD_START_ROUTINE, param: ?*anyopaque, flags: DWORD, tid: ?*DWORD) callconv(.winapi) ?HANDLE;
@@ -518,6 +528,18 @@ pub const FILETIME = extern struct {
         return (@as(u64, t.dwHighDateTime) << 32) | t.dwLowDateTime;
     }
 };
+pub const WIN32_FILE_ATTRIBUTE_DATA = extern struct {
+    dwFileAttributes: DWORD,
+    ftCreationTime: FILETIME,
+    ftLastAccessTime: FILETIME,
+    ftLastWriteTime: FILETIME,
+    nFileSizeHigh: DWORD,
+    nFileSizeLow: DWORD,
+};
+pub const GetFileExInfoStandard: c_int = 0;
+pub extern "kernel32" fn GetFileAttributesExW(path: [*:0]const u16, level: c_int, out: *WIN32_FILE_ATTRIBUTE_DATA) callconv(.winapi) BOOL;
+pub const DRIVE_REMOTE: UINT = 4;
+pub extern "kernel32" fn GetDriveTypeW(root: ?[*:0]const u16) callconv(.winapi) UINT;
 pub extern "kernel32" fn GetProcessTimes(process: HANDLE, creation: *FILETIME, exit: *FILETIME, kernel: *FILETIME, user: *FILETIME) callconv(.winapi) BOOL;
 pub extern "kernel32" fn GetLocalTime(time: *SYSTEMTIME) callconv(.winapi) void;
 pub extern "kernel32" fn CreateDirectoryW(path: [*:0]const u16, sa: ?*SECURITY_ATTRIBUTES) callconv(.winapi) BOOL;

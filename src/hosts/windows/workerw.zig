@@ -34,10 +34,10 @@ pub const Host = struct {
     progman: w.HWND,
     /// Where wallpaper windows are parented: WorkerW (classic) or Progman (raised).
     parent: w.HWND,
-    /// Raised layout: the icon layer our windows sit directly beneath.
-    shell_view: ?w.HWND,
-    /// Raised layout: Progman's WorkerW, kept as the bottom-most child.
-    workerw: ?w.HWND,
+    /// Raised layout: windows sit directly beneath the icon layer
+    /// (SHELLDLL_DefView), with Progman's WorkerW kept as the bottom-most
+    /// child. Both are looked up each time (`shellView`, `progmanWorkerW`):
+    /// Explorer may recreate them, and a kept handle would go stale.
     layout: Layout,
     explorer_pid: w.DWORD,
 
@@ -50,11 +50,13 @@ pub const Host = struct {
         _ = w.SendMessageTimeoutW(progman, spawn_workerw_msg, 0xD, 0x1, w.SMTO_NORMAL, 1000, &result);
 
         if (w.getStyle(progman, w.GWL_EXSTYLE) & w.WS_EX_NOREDIRECTIONBITMAP != 0) {
+            // Right after an Explorer restart the icon layer may not exist
+            // yet; without it a wallpaper would go above the icons. Not
+            // ready: the caller tries again.
+            if (shellView(progman) == null) return error.DesktopLayerNotFound;
             return .{
                 .progman = progman,
                 .parent = progman,
-                .shell_view = w.FindWindowExW(progman, null, w.L("SHELLDLL_DefView"), null),
-                .workerw = w.FindWindowExW(progman, null, w.L("WorkerW"), null),
                 .layout = .raised,
                 .explorer_pid = pid,
             };
@@ -68,8 +70,6 @@ pub const Host = struct {
             if (found) |workerw| return .{
                 .progman = progman,
                 .parent = workerw,
-                .shell_view = null,
-                .workerw = workerw,
                 .layout = .classic,
                 .explorer_pid = pid,
             };
@@ -104,7 +104,7 @@ pub const Host = struct {
         try h.place(hwnd, bounds);
         _ = w.ShowWindow(hwnd, w.SW_SHOWNA);
 
-        if (h.workerw) |ww| if (h.layout == .raised) {
+        if (h.layout == .raised) if (w.FindWindowExW(h.progman, null, w.L("WorkerW"), null)) |ww| {
             _ = w.SetWindowPos(ww, w.HWND_BOTTOM, 0, 0, 0, 0, w.SWP_NOMOVE | w.SWP_NOSIZE | w.SWP_NOACTIVATE);
         };
     }
@@ -114,13 +114,20 @@ pub const Host = struct {
         var origin = [1]w.POINT{.{ .x = bounds.x, .y = bounds.y }};
         _ = w.MapWindowPoints(null, h.parent, &origin, 1);
 
-        const below_icons = h.layout == .raised and h.shell_view != null;
-        const flags = w.SWP_NOACTIVATE | w.SWP_FRAMECHANGED | (if (below_icons) 0 else w.SWP_NOZORDER);
-        const after = if (below_icons) h.shell_view else null;
+        // Raised: directly beneath the icons. If the icon layer is gone
+        // (Explorer is recreating it), say so: the caller attaches afresh.
+        const view: ?w.HWND = if (h.layout == .raised) shellView(h.progman) orelse return error.DesktopLayerNotFound else null;
+        const flags = w.SWP_NOACTIVATE | w.SWP_FRAMECHANGED | (if (view != null) 0 else w.SWP_NOZORDER);
+        const after = view;
         if (w.SetWindowPos(hwnd, after, origin[0].x, origin[0].y, @intCast(bounds.w), @intCast(bounds.h), flags) == 0) // zsnag:ok — monitor-sized, far below c_int's range
             return error.AttachFailed;
     }
 };
+
+/// Raised layout: the icon layer, a child of Progman.
+fn shellView(progman: w.HWND) ?w.HWND {
+    return w.FindWindowExW(progman, null, w.L("SHELLDLL_DefView"), null);
+}
 
 /// The PID of the process owning the taskbar (Explorer), or 0 if it isn't running.
 pub fn explorerPid() w.DWORD {

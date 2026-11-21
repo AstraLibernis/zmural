@@ -70,6 +70,7 @@ const facts_coalesce_ms = 100;
 const facts_backstop_ticks = 8;
 const tick_ms = 250;
 const reattach_delay_ms = 500;
+const reattach_max_delay_ms = 10_000;
 const connect_timeout_ms = 10_000;
 /// How long a renderer asked to stop gets before it is killed.
 const stop_grace_ms = 1_000;
@@ -178,6 +179,8 @@ const Runtime = struct {
     instance: ?w.HINSTANCE = null,
     control: ?w.HWND = null,
     host: ?Host = null,
+    /// Failed attaches in a row: the retry backs off, and only the first is logged.
+    reattach_tries: u8 = 0,
     hook: ?w.HWINEVENTHOOK = null,
     taskbar_created: w.UINT = 0,
     main_thread: w.DWORD = 0,
@@ -336,6 +339,12 @@ fn shutdown() void {
     if (rt.shut_down) return;
     rt.shut_down = true;
     rt.quitting = true;
+    // The settings first: at logoff Windows may end the process at any point
+    // after this, and closing the window can wait on a request in flight.
+    // (A first run that changed nothing leaves no settings.toml, so the next
+    // start is a first run again: Welcome, Prism, as on Linux.)
+    const untouched = if (rt.store) |s| s.fresh and rt.file_stamp == null else false;
+    if (!untouched) save();
     // The window's thread uses this process's memory: it goes first.
     settings_window.close();
     _ = w.KillTimer(rt.control, timer_tick);
@@ -364,10 +373,6 @@ fn shutdown() void {
     }
     if (rt.server) |*s| s.stop();
     if (rt.tray) |*t| t.hide();
-    // A first run that changed nothing leaves no settings.toml, so the next
-    // start is a first run again (Welcome, Prism), as on Linux.
-    const untouched = if (rt.store) |s| s.fresh and rt.file_stamp == null else false;
-    if (!untouched) save();
     if (rt.job) |j| j.deinit();
     if (rt.web_job) |j| j.deinit();
     releaseMemory();
@@ -406,10 +411,13 @@ fn attachHost() void {
     const host = Host.init() catch |err| {
         // Forget the old layer: it's gone, and nothing may attach to it.
         rt.host = null;
-        std.log.warn("desktop layer not ready ({s}); retrying", .{@errorName(err)});
+        if (rt.reattach_tries == 0) std.log.warn("desktop layer not ready ({s}); retrying", .{@errorName(err)});
+        rt.reattach_tries +|= 1;
         scheduleReattach();
         return;
     };
+    // `reattach_tries` is reset only once a window attaches (or something
+    // changes): a layer found but refusing windows must still back off.
     rt.host = host;
     std.log.info("desktop: {s} layout, explorer pid {d}", .{ @tagName(host.layout), host.explorer_pid });
     if (rt.hook) |old| _ = w.UnhookWinEvent(old);
@@ -1155,6 +1163,9 @@ fn onTray(lp: w.LPARAM) void {
         .library_count = rt.library.count(),
         .autostart = autostartOn(),
     }) orelse return;
+    // The menu runs its own message loop: a logoff (WM_ENDSESSION) may have
+    // shut zmural down and freed its state while it was open.
+    if (rt.shut_down) return;
     switch (item) {
         .open_settings => return openSettings(),
         .open_log => return openInNotepad(zmural.os.logfile.path()),
@@ -1584,8 +1595,14 @@ fn onRenderer(r: *Renderer, msg: proto.FromRenderer) void {
             const host = rt.host orelse return;
             host.attach(hwnd, rt.screens.items[win.surface].rect) catch |err| {
                 std.log.err("renderer {d}: surface {d}: attach failed: {s}", .{ r.id, win.surface, @errorName(err) });
+                // The desktop layer changed under us (Explorer recreating
+                // it): find it again, backing off if it keeps failing.
+                rt.host = null;
+                rt.reattach_tries +|= 1;
+                scheduleReattach();
                 return;
             };
+            rt.reattach_tries = 0;
             r.windows[win.surface] = hwnd;
             // Beneath the wallpaper it replaces, which stays until this one shows.
             if (outgoingWindow(win.surface)) |above|
@@ -1657,8 +1674,19 @@ fn send(r: *Renderer, msg: proto.ToRenderer) void {
 
 // ---- recovery ----------------------------------------------------------------
 
+/// Soon after something changed, then backing off while no desktop layer
+/// can be found (Explorer not running): 0.5, 1, 2, 4, 8, then every 10 s.
 fn scheduleReattach() void {
-    _ = w.SetTimer(rt.control, timer_reattach, reattach_delay_ms, null);
+    const shift: u3 = @intCast(@min(rt.reattach_tries, 5)); // zsnag:ok — capped at 5
+    const delay: w.UINT = @min(@as(w.UINT, reattach_delay_ms) << shift, reattach_max_delay_ms);
+    _ = w.SetTimer(rt.control, timer_reattach, delay, null);
+}
+
+/// Something changed (a new Explorer, the layer destroyed, the displays):
+/// look again soon, whatever the retries before.
+fn reattachSoon() void {
+    rt.reattach_tries = 0;
+    scheduleReattach();
 }
 
 fn reattach() void {
@@ -1752,6 +1780,9 @@ fn evaluate() void {
     const changed = !snap.eql(&rt.snapshot);
     rt.snapshot = snap;
     if (changed) logSnapshot();
+    const quiet = fullscreenHoldsAll();
+    if (quiet != rt.watcher.quiet) std.log.info("window events: {s}", .{if (quiet) "only the essential ones while a fullscreen app runs" else "all again"});
+    rt.watcher.setQuiet(onWindowEvent, quiet);
 
     const t = now();
     for (rt.renderers.items) |r| {
@@ -1761,6 +1792,17 @@ fn evaluate() void {
             execute(r, cmd);
         }
     }
+}
+
+/// A fullscreen app (a game) is up and the rules pause or stop every
+/// monitor for it: window moves can't change anything until it goes.
+fn fullscreenHoldsAll() bool {
+    const rule = rt.settings.policy.rules.get(.fullscreen);
+    if (rule.action != .pause and rule.action != .stop) return false;
+    if (rule.scope != .all) return false;
+    if (rt.snapshot.system.contains(.fullscreen)) return true;
+    for (rt.snapshot.monitors[0..rt.snapshot.count]) |c| if (c.contains(.fullscreen)) return true;
+    return false;
 }
 
 var held_buf: [512]u8 = undefined;
@@ -1856,7 +1898,7 @@ fn controlProc(hwnd: w.HWND, msg: w.UINT, wp: w.WPARAM, lp: w.LPARAM) callconv(.
         const current = if (rt.host) |h| h.explorer_pid else 0;
         if (pid != current or rt.host == null or !rt.host.?.isValid()) {
             std.log.info("explorer restarted (pid {d}); re-attaching", .{pid});
-            scheduleReattach();
+            reattachSoon();
         }
         return 0;
     }
@@ -1879,7 +1921,7 @@ fn controlProc(hwnd: w.HWND, msg: w.UINT, wp: w.WPARAM, lp: w.LPARAM) callconv(.
         },
         WM_LAYER_GONE => {
             std.log.info("desktop layer destroyed; re-attaching", .{});
-            scheduleReattach();
+            reattachSoon();
             return 0;
         },
         w.WM_TIMER => {
@@ -1894,7 +1936,7 @@ fn controlProc(hwnd: w.HWND, msg: w.UINT, wp: w.WPARAM, lp: w.LPARAM) callconv(.
             return 0;
         },
         w.WM_DISPLAYCHANGE => {
-            scheduleReattach();
+            reattachSoon();
             return 0;
         },
         w.WM_WTSSESSION_CHANGE => {
